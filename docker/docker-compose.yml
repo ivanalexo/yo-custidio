@@ -1,0 +1,62 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ..:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27019/electoral_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - RABBITMQ_QUEUE=ballot_processing
+      - IMAGE_PROCESSOR_URL=http://image-processor:5000
+      - ANTHROPIC_API_KEY=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
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+      - image-processor
+
+  image-processor:
+    build:
+      context: ../image_processor
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27019:27019"
+    volumes:
+      - mongodb_data:/data/db
+    command: mongod --port 27019
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+
+volumes:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:
