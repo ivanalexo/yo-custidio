@@ -8,6 +8,7 @@ import * as redisStore from 'cache-manager-redis-store';
 import { RabbitMQService } from './core/services/rabbitmq.service';
 import appConfig from './config/app.config';
 import { BallotProcessingModule } from './modules/ballot-processing/ballot-processing.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { BallotProcessingModule } from './modules/ballot-processing/ballot-proce
       inject: [ConfigService],
     }),
     BallotProcessingModule,
+    AdminModule,
   ],
   controllers: [],
   providers: [RabbitMQService],
