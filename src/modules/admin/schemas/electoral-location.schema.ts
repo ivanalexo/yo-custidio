@@ -1,5 +1,4 @@
 /* eslint-disable prettier/prettier */
-// src/modules/admin/schemas/electoral-location.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 import * as mongoose from 'mongoose';
