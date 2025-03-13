@@ -9,3 +9,7 @@ Para detener los contenedores, se puede hacer desde Docker Desktop o ejecutando 
 ```bash
 $ docker-compose stop
 ```
+
+## Swagger
+la documentación de los endpoints se encuentra en Swagger, se puede acceder a ella accediendo a la ruta:
+`http://localhost:3000/api/docs`
