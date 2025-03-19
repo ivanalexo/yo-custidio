@@ -1,8 +1,11 @@
+version: '3.8'
+
 services:
   api:
     build:
       context: ..
       dockerfile: Dockerfile.dev
+    container_name: electoral-api
     volumes:
       - ..:/usr/src/app
       - /usr/src/app/node_modules
@@ -13,22 +16,50 @@ services:
       - MONGODB_URI=mongodb://mongodb:27019/electoral_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - JWT_SECRET=y0-cust0d!O-2025$
+      - JWT_EXPIRATION=1d
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-      - RABBITMQ_QUEUE=ballot_processing
       - IMAGE_PROCESSOR_URL=http://image-processor:5000
       - ANTHROPIC_API_KEY=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
+      - ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+      - CACHE_ENABLED=true
+      - CACHE_TTL=300
+      - CORS_ENABLED=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:4200
+      - REALTIME_ENABLED=true
     depends_on:
       - mongodb
       - redis
       - rabbitmq
-      - image-processor
+    networks:
+      - electoral-network
 
   image-processor:
     build:
       context: ../image_processor
       dockerfile: Dockerfile
+    container_name: electoral-image-processor
     ports:
       - "5000:5000"
+    volumes:
+      - ../image_processor:/app
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
+      - IMAGE_PROCESSING_QUEUE=image_processing_queue
+      - OCR_PROCESSING_QUEUE=ocr_processing_queue
+      - ANTHROPIC_FALLBACK_QUEUE=anthropic_fallback_queue
+      - RESULTS_QUEUE=results_queue
+      - BALLOT_PROCESSING_EXCHANGE=ballot_processing_exchange
+      - ANTHROPIC_API_KEY=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
+      - ANTHROPIC_MODEL=claude-3-7-sonnet-20250219
+    depends_on:
+      - rabbitmq
+    networks:
+      - electoral-network
+
 
   mongodb:
     image: mongo:latest
@@ -36,17 +67,23 @@ services:
       - "27019:27019"
     volumes:
       - mongodb_data:/data/db
+    networks:
+      - electoral-network
     command: mongod --port 27019
 
   redis:
     image: redis:alpine
+    container_name: electoral-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - electoral-network
 
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: electoral-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -55,6 +92,11 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=user
       - RABBITMQ_DEFAULT_PASS=password
+    networks:
+      - electoral-network
+networks:
+  electoral-network:
+    driver: bridge
 
 volumes:
   mongodb_data:
