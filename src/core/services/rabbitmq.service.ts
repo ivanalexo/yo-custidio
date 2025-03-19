@@ -102,11 +102,31 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       'app.rabbitmq.exchanges',
     );
 
+    // habilitar Dead Letter Exchange
+    await this.channel.assertExchange('dlx', 'direct', { durable: true });
+
     if (queues) {
       this.logger.log(queues);
       for (const [key, queueName] of Object.entries(queues)) {
         this.logger.log(`Creando cola: ${queueName}`);
-        await this.channel.assertQueue(queueName, { durable: true });
+        await this.channel.assertQueue(queueName, {
+          durable: true,
+          arguments: {
+            'x-dead-letter-exchange': 'dlx',
+            'x-dead-letter-routing-key': `${queueName}.dlq`
+          }
+        });
+
+        // crear cola Dead Letter Queue
+        await this.channel.assertQueue(`${queueName}.dlq`, { durable: true });
+
+        // enlazar DLQ a DLX
+
+        await this.channel.bindQueue(
+          `${queueName}.dlq`,
+          'dlx',
+          `${queueName}.dlq`
+        );
       }
     }
 
@@ -147,6 +167,33 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         );
       }
     }
+
+    // agregamos cola para Anthropic Fallback
+    const anthropicFallbackQueue = 'anthropic_fallback_queue';
+
+    await this.channel.assertQueue(anthropicFallbackQueue, {
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': 'dlx',
+        'x-dead-letter-routing-key': `${anthropicFallbackQueue}.dlq`
+      }
+    });
+
+    await this.channel.assertQueue(`${anthropicFallbackQueue}.dlq`, { durable: true });
+
+    await this.channel.bindQueue(
+      `${anthropicFallbackQueue}.dlq`,
+      'dlx',
+      `${anthropicFallbackQueue}.dlq`
+    );
+
+    if (exchanges && exchanges.ballotProcessing) {
+      await this.channel.bindQueue(
+        anthropicFallbackQueue,
+        exchanges.ballotProcessing,
+        'anthropic_fallback'
+      );
+    }
   }
 
   private async disconnect() {
@@ -172,12 +219,17 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
             this.logger.error('Cannot publish message');
             return;
         }
+
+      this.logger.log(`Publicando mensaje a ${exchange}:${routingKey}`);
+
       this.channel.publish(
         exchange,
         routingKey,
         Buffer.from(JSON.stringify(message)),
         { persistent: true },
       );
+
+      this.logger.log(`Mensaje publicado exitosamente a ${exchange}:${routingKey}`);
     } catch (error) {
       console.error('Error publishing:', error);
     }
@@ -259,5 +311,44 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     };
 
     return setupConsumer();
+  }
+
+  async retryDeadLetterMessages(dlqName: string, targetQueue: string, count: number = 10): Promise<number> {
+    if (!this.channel) {
+      await this.connect();
+      if (!this.channel) {
+        throw new Error('Failed to create channel');
+      }
+    }
+
+    let processedCount = 0;
+
+    for (let i = 0; i < count; i++) {
+      const message = await this.channel.get(dlqName, { noAck: false });
+      if (!message) {
+        break; // No hay más mensajes
+      }
+
+      try {
+        // Publicar a la cola original
+        this.channel.publish(
+          '',
+          targetQueue,
+          message.content,
+          { persistent: true }
+        );
+
+        // Confirmar procesamiento
+        this.channel.ack(message);
+
+        processedCount++;
+      } catch (error) {
+        this.logger.error(`Error retrying message: ${error}`);
+        this.channel.nack(message, false, true); // Reencolar en DLQ
+        break;
+      }
+    }
+
+    return processedCount;
   }
 }

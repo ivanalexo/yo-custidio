@@ -13,12 +13,14 @@ import { ImageProcessingService } from './services/image-processing.service';
 import { Ballot, BallotSchema } from './schemas/ballot.schema';
 import { RabbitMQService } from '../../core/services/rabbitmq.service';
 import { DataExtractionService } from './services/data-extraction.service';
-import { BallotConsumerService } from './services/ballot-consumer.service';
 import { ResultsService } from './services/results.service';
+import { CoreModule } from '../../core/core.module';
+import { BallotConsumerService } from './services/ballot-consumer.service';
 
 @Module({
     imports: [
         ConfigModule,
+        CoreModule,
         MongooseModule.forFeature([
             { name: Ballot.name, schema: BallotSchema},
         ]),

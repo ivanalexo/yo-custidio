@@ -20,6 +20,7 @@ export default registerAs('app', () => ({
         ocrProcessing: 'ocr_processing_queue',
         dataValidation: 'data_validation_queue',
         resultAggregation: 'result_aggregation_queue',
+        results: process.env.RABBITMQ_QUEUE_RESULTS || 'results_queue',
     },
     exchanges: {
         ballotProcessing: 'ballot_processing_exchange',
@@ -32,7 +33,10 @@ export default registerAs('app', () => ({
   },
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241029'
+    model: process.env.ANTHROPIC_MODEL || 'claude-3-7-sonnet-20250219'
+  },
+  imageProcessor: {
+    url: process.env.IMAGE_PROCESSOR_URL || 'http://image-processor:5000'
   },
   jwt: {
     secret: process.env.JWT_SECRET,
