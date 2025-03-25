@@ -164,7 +164,7 @@ export class TokenService {
         // limite basico por IP (5 subidas/hora)
         const limit = this.configService.get<number>('app.rateLimit.upload', 5);
         if (count >= limit) {
-            return true;
+            return false;
         }
 
         await this.cacheManager.set(cacheKey, count + 1, 60 * 60 * 1000);

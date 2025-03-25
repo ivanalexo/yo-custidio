@@ -102,11 +102,11 @@ def extract_text_from_region(roi, mode='text'):
     if mode == 'numeric':
         # Optimizar para dígitos
         roi = preprocess_digits(roi)
-        config = r'--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789'
+        config = r'--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789 -l spa'
     else:
         # Optimizar para texto general
         roi = preprocess_text(roi)
-        config = r'--oem 1 --psm 6'
+        config = r'--oem 1 --psm 6 -l spa'
     
     # Aplicar OCR
     text = pytesseract.image_to_string(roi, config=config)
@@ -120,21 +120,31 @@ def preprocess_digits(image):
     """Optimiza una imagen para reconocimiento de dígitos"""
     # 1. Redimensionar (ampliar) para mejor reconocimiento
     height, width = image.shape
-    resized = cv2.resize(image, (width*2, height*2), interpolation=cv2.INTER_CUBIC)
+    resized = cv2.resize(image, (width*3, height*3), interpolation=cv2.INTER_CUBIC)
     
-    # 2. Binarizar usando umbral adaptativo
+    # 2. Mejorar contraste
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(resized)
+
+    # 3. Binarizar usando umbral adaptativo con parametros optimizados
     binary = cv2.adaptiveThreshold(
-        resized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+        resized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 8
     )
     
-    # 3. Eliminar ruido
+    # 4. Eliminar ruido
     kernel = np.ones((2, 2), np.uint8)
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
     
-    # 4. Dilatar ligeramente para conectar partes de dígitos
+    # 5. Dilatar ligeramente para conectar partes de dígitos
     dilated = cv2.dilate(cleaned, kernel, iterations=1)
     
-    return dilated
+    # 6. suavizar bordes
+    smoothed = cv2.GaussianBlur(dilated, (3, 3), 0)
+    
+    # 7. Binarizar otra vez para obtener pixeles claros
+    _, final = cv2.threshold(smoothed, 127, 255, cv2.THRESH_BINARY)
+    
+    return final
 
 def preprocess_text(image):
     """Optimiza una imagen para reconocimiento de texto general"""
