@@ -8,6 +8,7 @@ import { User, UserDocument } from '../schemas/user.schema';
 import { LoginDto, RegisterUserDto } from '../dto/auth.dto';
 
 export interface UserData {
+    sub?: string;
     id: string;
     email: string;
     name: string;
