@@ -1,4 +1,6 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -12,210 +14,300 @@ import { DataExtractionService } from './data-extraction.service';
 
 @Injectable()
 export class BallotService {
-    private readonly logger = new Logger(BallotService.name);
+  private readonly logger = new Logger(BallotService.name);
 
-    constructor(
-        @InjectModel(Ballot.name) private ballotModel: Model<BallotDocument>,
-        private configService: ConfigService,
-        private rabbitMQService: RabbitMQService,
-        private imageProcessingService: ImageProcessingService,
-        private dataExtractionService: DataExtractionService,
-    ) {}
+  constructor(
+    @InjectModel(Ballot.name) private ballotModel: Model<BallotDocument>,
+    private configService: ConfigService,
+    private rabbitMQService: RabbitMQService,
+    private imageProcessingService: ImageProcessingService,
+    private dataExtractionService: DataExtractionService,
+  ) {}
 
-    async createBallot(
-        imageBuffer: Buffer,
-        createBallotDto: CreateBallotDto,
-        clientInfo: { ipAddress: string; userAgent: string },
-    ) {
-        try {
-            const trackingId = randomUUID();
-            const { imageHash } = await this.imageProcessingService.processImage(imageBuffer);
-            const existingBallot = await this.ballotModel.findOne({ imageHash });
+  async createBallot(
+    imageBuffer: Buffer,
+    createBallotDto: CreateBallotDto,
+    clientInfo: { ipAddress: string; userAgent: string },
+  ) {
+    try {
+      const trackingId = randomUUID();
 
-            if (existingBallot) {
-                this.logger.warn(`Dupliate ballot: ${imageHash}`);
-                return {
-                    trackingId: existingBallot._id,
-                    status: 'DUPLICATE',
-                    message: 'Esta acta ya ha sido subida previamente',
-                };
-            }
+      if (!imageBuffer || !(imageBuffer instanceof Buffer)) {
+        throw new Error('Buffer de imagen no valido');
+      }
 
-            const validation = await this.imageProcessingService.isBallotValid(imageBuffer);
+      const { imageHash } =
+        await this.imageProcessingService.processImage(imageBuffer);
+      const existingBallot = await this.ballotModel.findOne({ imageHash });
 
-            if (!validation.isValid) {
-                this.logger.warn('Imagen rechazada', validation.reason, validation.confidence);
-                return {
-                    trackingId,
-                    status: 'RECHAZADO',
-                    message: 'La imagen no parace ser un acta electoral'
-                }
-            }
-
-            const newBallot = new this.ballotModel({
-                tableNumber: createBallotDto.tableNumber,
-                locationId: createBallotDto.locationCode,
-                imageHash,
-                imageUrl: `ballot_${trackingId}`,
-                processingStatus: {
-                    stage: 'RECEIVED',
-                    confidenceScore: 0,
-                },
-                metadata: {
-                    submitterId: createBallotDto.citizenId,
-                    ipAddress: clientInfo.ipAddress,
-                    userAgent: clientInfo.userAgent,
-                },
-                verificationHistory: [
-                    {
-                        status: 'RECEIVED',
-                        verifiedAt: new Date(),
-                        notes: 'Acta recibida para procesamiento',
-                    },
-                ],
-            });
-
-            const savedBallot = await newBallot.save();
-
-            this.rabbitMQService.publishMessage(
-                this.configService.get<string>('app.rabbitmq.exchanges.ballotProcessing')!,
-                'image_processing',
-                {
-                    ballotId: savedBallot._id,
-                    imageBuffer: imageBuffer.toString('base64'),
-                    confidence: validation.confidence,
-                },
-            );
-
-            return {
-                trackingId: savedBallot._id,
-                status: 'RECEIVED',
-                message: 'Acta recibida correctamente y en proceso',
-            };
-        } catch (error) {
-            this.logger.error(error);
-            throw error;
-        }
-    }
-
-    async getBallotStatus(trackingId: string) {
-        const ballot = await this.ballotModel.findById(trackingId).exec();
-
-        if (!ballot) {
-            throw new NotFoundException('Acta no encontrada')
-        }
-
+      if (existingBallot) {
+        this.logger.warn(`Dupliate ballot: ${imageHash}`);
         return {
-            trackingId,
-            tableNumber: ballot.tableNumber,
-            status: ballot.processingStatus.stage,
-            verificationHistory: ballot.verificationHistory,
-        }
-    }
-
-    async listBallots(filters: { tableNumber?: string; status?: string }) {
-        const query: { tableNumber?: string; 'processingStatus.stage'?: string } = {};
-
-        if (filters.tableNumber) {
-          query.tableNumber = filters.tableNumber;
-        }
-
-        if (filters.status) {
-          query['processingStatus.stage'] = filters.status;
-        }
-
-        const ballots = await this.ballotModel
-          .find(query)
-          .select('tableNumber processingStatus updatedAt')
-          .sort({ updatedAt: -1 })
-          .limit(100)
-          .exec();
-
-        return {
-          total: ballots.length,
-          ballots: ballots.map(ballot => ({
-            trackingId: ballot._id,
-            tableNumber: ballot.tableNumber,
-            status: ballot.processingStatus.stage,
-          })),
+          trackingId: existingBallot._id,
+          status: 'DUPLICATE',
+          message: 'Esta acta ya ha sido subida previamente',
         };
       }
 
-      async processBallotFromQueue(ballotId: string, imageBase64: string): Promise<void> {
-        try {
-            const ballot = await this.ballotModel.findById(ballotId).exec();
+      const validation =
+        await this.imageProcessingService.isBallotValid(imageBuffer);
+      this.logger.log(`Validacion: ${JSON.stringify(validation)}`);
 
-            if (!ballot) {
-                this.logger.error(`No se encontro acta ID: ${ballotId}`);
-                return;
-            }
+      if (!validation.isValid) {
+        this.logger.warn(
+          'Imagen rechazada',
+          validation.reason,
+          validation.confidence,
+        );
+        return {
+          trackingId,
+          status: 'RECHAZADO',
+          message: 'La imagen no parace ser un acta electoral',
+        };
+      }
 
-            ballot.processingStatus.stage = 'PROCESSING';
-            await ballot.save();
+      const newBallot = new this.ballotModel({
+        tableNumber: createBallotDto.tableNumber,
+        locationId: createBallotDto.locationCode,
+        imageHash,
+        imageUrl: `ballot_${trackingId}`,
+        processingStatus: {
+          stage: 'RECEIVED',
+          confidenceScore: 0,
+        },
+        metadata: {
+          submitterId: createBallotDto.citizenId,
+          ipAddress: clientInfo.ipAddress,
+          userAgent: clientInfo.userAgent,
+        },
+        verificationHistory: [
+          {
+            status: 'RECEIVED',
+            verifiedAt: new Date(),
+            notes: 'Acta recibida para procesamiento',
+          },
+        ],
+      });
 
-            const imageBuffer = Buffer.from(imageBase64, 'base64');
+      const savedBallot = await newBallot.save();
 
-            const extractionResult = await this.dataExtractionService.extractDataFromBallot(imageBuffer);
+      const exchangeName = this.configService.get<string>(
+        'app.rabbitmq.exchanges.ballotProcessing',
+      )!;
+      this.logger.log(`Enviando a cola: ${exchangeName} - image_processing`);
 
-            if (!extractionResult.success) {
-                ballot.processingStatus.stage = 'EXTRACTION_FAILED';
-                ballot.processingStatus.error = extractionResult.errorMessage;
-                await ballot.save();
+      this.rabbitMQService.publishMessage(
+        this.configService.get<string>(
+          'app.rabbitmq.exchanges.ballotProcessing',
+        )!,
+        'image_processing',
+        {
+          ballotId: savedBallot._id,
+          imageBuffer: imageBuffer.toString('base64'),
+          confidence: validation.confidence,
+        },
+      );
 
-                this.logger.error(`Error extracting data from ballot ${ballotId}`);
-                return;
-            }
+      return {
+        trackingId: savedBallot._id,
+        status: 'RECEIVED',
+        message: 'Acta recibida correctamente y en proceso',
+      };
+    } catch (error) {
+      this.logger.error(error);
+      throw error;
+    }
+  }
 
+  async getBallotStatus(trackingId: string) {
+    const ballot = await this.ballotModel.findById(trackingId).exec();
+
+    if (!ballot) {
+      throw new NotFoundException('Acta no encontrada');
+    }
+
+    return {
+      trackingId,
+      tableNumber: ballot.tableNumber,
+      status: ballot.processingStatus.stage,
+      verificationHistory: ballot.verificationHistory,
+    };
+  }
+
+  async listBallots(filters: { tableNumber?: string; status?: string }) {
+    const query: { tableNumber?: string; 'processingStatus.stage'?: string } =
+      {};
+
+    if (filters.tableNumber) {
+      query.tableNumber = filters.tableNumber;
+    }
+
+    if (filters.status) {
+      query['processingStatus.stage'] = filters.status;
+    }
+
+    const ballots = await this.ballotModel
+      .find(query)
+      .select('tableNumber processingStatus updatedAt')
+      .sort({ updatedAt: -1 })
+      .limit(100)
+      .exec();
+
+    return {
+      total: ballots.length,
+      ballots: ballots.map((ballot) => ({
+        trackingId: ballot._id,
+        tableNumber: ballot.tableNumber,
+        status: ballot.processingStatus.stage,
+      })),
+    };
+  }
+
+  async processBallotFromQueue(
+    ballotId: string,
+    resultData: any,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `Procesando resultado para acta ${ballotId}, status: ${resultData.status}`,
+      );
+
+      const ballot = await this.ballotModel.findById(ballotId).exec();
+
+      if (!ballot) {
+        this.logger.error(`No se encontró acta ID: ${ballotId}`);
+        return;
+      }
+
+      // Añadir registro en el historial de verificación
+      const historyEntry = {
+        status: resultData.status,
+        verifiedAt: new Date(),
+        notes: '',
+      };
+
+      switch (resultData.status) {
+        case 'COMPLETED':
+          // Actualizar datos de votos si están disponibles
+          if (resultData.results) {
             ballot.votes = {
-                validVotes: extractionResult.votes.validVotes,
-                nullVotes: extractionResult.votes.nullVotes,
-                blankVotes: extractionResult.votes.blankVotes,
-                partyVotes: extractionResult.votes.partyVotes,
+              validVotes: resultData.results.votes?.validVotes || 0,
+              nullVotes: resultData.results.votes?.nullVotes || 0,
+              blankVotes: resultData.results.votes?.blankVotes || 0,
+              partyVotes: resultData.results.votes?.partyVotes || [],
             };
 
-            if (!ballot.tableNumber && extractionResult.tableNumber) {
-                ballot.tableNumber = extractionResult.tableNumber;
-            } else if (ballot.tableNumber && extractionResult.tableNumber) {
-                if (ballot.tableNumber !== extractionResult.tableNumber) {
-                    ballot.tableNumber = extractionResult.tableNumber;
-                }
+            // Actualizar número de mesa si es necesario
+            if (
+              resultData.results.tableNumber &&
+              (!ballot.tableNumber ||
+                ballot.tableNumber !== resultData.results.tableNumber)
+            ) {
+              ballot.tableNumber = resultData.results.tableNumber;
             }
+          }
 
-            ballot.processingStatus.stage = 'COMPLETED';
-            ballot.processingStatus.confidenceScore = 0.9;
+          ballot.processingStatus.stage = 'COMPLETED';
+          ballot.processingStatus.confidenceScore =
+            resultData.confidence || 0.9;
 
-            ballot.verificationHistory.push({
-                status: 'PROCESSED',
-                verifiedAt: new Date(),
-                notes: 'Acta procesada automaticamente',
-            });
+          historyEntry.notes = `Acta procesada correctamente (fuente: ${resultData.source || 'unknown'})`;
 
-            await ballot.save();
+          this.logger.log(
+            `Acta ${ballotId} procesada con éxito, confianza: ${ballot.processingStatus.confidenceScore}`,
+          );
+          break;
 
-            this.logger.log(`Acta ${ballotId} procesada correctamente`);
-        } catch (error) {
-            this.logger.error(error);
+        case 'EXTRACTION_FAILED':
+          ballot.processingStatus.stage = 'EXTRACTION_FAILED';
+          ballot.processingStatus.error =
+            resultData.error || 'Error desconocido en extracción';
 
-            try {
-                await this.ballotModel.findByIdAndUpdate(
-                    ballotId,
-                    {
-                        $set: {
-                            'processingStatus.stage': 'ERROR',
-                            'processingStatus.error': error instanceof Error ? error.message : 'Unknown error',
-                        },
-                        $push: {
-                            verificationHistory: {
-                                status: 'ERROR',
-                                verifiedAt: new Date(),
-                                notes: `Error durante el procesamient ${error}`
-                            },
-                        },
-                    }
-                ).exec();
-            } catch (dbError) {
-                this.logger.error(dbError);
-            }
-        }
+          historyEntry.notes = `Error durante la extracción: ${resultData.error || 'Error desconocido'}`;
+
+          this.logger.error(
+            `Error de extracción para acta ${ballotId}: ${resultData.error}`,
+          );
+          break;
+
+        case 'REJECTED':
+          ballot.processingStatus.stage = 'REJECTED';
+          ballot.processingStatus.error = resultData.reason || 'Acta rechazada';
+          ballot.processingStatus.confidenceScore = resultData.confidence || 0;
+
+          historyEntry.notes = `Acta rechazada: ${resultData.reason || 'Razón no especificada'}`;
+
+          this.logger.warn(`Acta ${ballotId} rechazada: ${resultData.reason}`);
+          break;
+
+        case 'VALIDATION_PENDING':
+          // Caso para actas que requieren validación manual
+          ballot.processingStatus.stage = 'VALIDATION_PENDING';
+          ballot.processingStatus.confidenceScore = resultData.confidence || 0;
+
+          if (resultData.results) {
+            // Guardar resultados preliminares aunque requieran validación
+            ballot.votes = {
+              validVotes: resultData.results.votes?.validVotes || 0,
+              nullVotes: resultData.results.votes?.nullVotes || 0,
+              blankVotes: resultData.results.votes?.blankVotes || 0,
+              partyVotes: resultData.results.votes?.partyVotes || [],
+            };
+          }
+
+          historyEntry.notes = `Acta requiere validación manual (confianza: ${resultData.confidence})`;
+
+          this.logger.warn(
+            `Acta ${ballotId} requiere validación manual, confianza: ${resultData.confidence}`,
+          );
+          break;
+
+        default:
+          // Estado no reconocido
+          ballot.processingStatus.stage = 'UNKNOWN';
+          ballot.processingStatus.error = `Estado no reconocido: ${resultData.status}`;
+
+          historyEntry.notes = `Estado no reconocido: ${resultData.status}`;
+
+          this.logger.error(
+            `Estado no reconocido para acta ${ballotId}: ${resultData.status}`,
+          );
       }
+
+      // Añadir entrada al historial
+      ballot.verificationHistory.push(historyEntry);
+
+      // Guardar cambios en la base de datos
+      await ballot.save();
+      this.logger.log(`Actualización guardada para acta ${ballotId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error procesando resultado para acta ${ballotId}: ${error}`,
+      );
+
+      // Intentar actualizar el estado a ERROR en caso de fallo
+      try {
+        await this.ballotModel
+          .findByIdAndUpdate(ballotId, {
+            $set: {
+              'processingStatus.stage': 'ERROR',
+              'processingStatus.error':
+                error instanceof Error ? error.message : 'Error desconocido',
+            },
+            $push: {
+              verificationHistory: {
+                status: 'ERROR',
+                verifiedAt: new Date(),
+                notes: `Error durante el procesamiento: ${error}`,
+              },
+            },
+          })
+          .exec();
+      } catch (dbError) {
+        this.logger.error(
+          `Error adicional al actualizar estado de ERROR: ${dbError}`,
+        );
+      }
+    }
+  }
 }

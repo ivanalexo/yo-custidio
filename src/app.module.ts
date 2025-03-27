@@ -9,6 +9,7 @@ import { RabbitMQService } from './core/services/rabbitmq.service';
 import appConfig from './config/app.config';
 import { BallotProcessingModule } from './modules/ballot-processing/ballot-processing.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { CoreModule } from './core/core.module';
 
 @Module({
   imports: [
@@ -31,17 +32,19 @@ import { AdminModule } from './modules/admin/admin.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         store: redisStore,
-        host: 'localhost',
-        port: 6379,
+        host: configService.get<string>('app.redis.host', 'localhost'),
+        port: configService.get<number>('app.redis.port', 6379),
         ttl: 60 * 60 * 24,
       }),
       inject: [ConfigService],
+      isGlobal: true,
     }),
+    CoreModule,
     BallotProcessingModule,
     AdminModule,
   ],
   controllers: [],
-  providers: [RabbitMQService],
-  exports: [RabbitMQService],
+  providers: [],
+  exports: [],
 })
 export class AppModule {}

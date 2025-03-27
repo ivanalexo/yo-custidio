@@ -6,9 +6,17 @@ import { RabbitMQService } from '../../../core/services/rabbitmq.service';
 import { BallotService } from './ballot.service';
 
 // Configurar consumidor para procesamiento de imágenes
-interface BallotMessage {
-    ballotId: string;
-    imageBuffer: string;
+interface BallotResultMessage {
+  ballotId: string;
+  status: string;
+  results?: {
+      tableNumber?: string;
+      votes?: any;
+  };
+  confidence?: number;
+  source?: string;
+  error?: string;
+  reason?: string;
 }
 
 @Injectable()
@@ -28,34 +36,30 @@ export class BallotConsumerService implements OnModuleInit {
   private async setupConsumers() {
     try {
       // Buscar las colas en la configuración
-      const queuesConfig = this.configService.get<{ imageProcessing: string }>('app.rabbitmq.queues');
-      
-      if (!queuesConfig || !queuesConfig.imageProcessing) {
-        this.logger.error('Queue configuration not found');
-        return;
-      }
+      const resultsQueue = this.configService.get<string>('app.rabbitmq.queues.results', 'results_queue');
 
-      const ballotProcessingQueue = queuesConfig.imageProcessing;
-      this.logger.log(`Setting up consumer for queue: ${ballotProcessingQueue}`);
+      this.logger.log(`Configurando consumidor para cola de resultados: ${resultsQueue}`);
 
-      await this.rabbitMQService.consumeMessage<BallotMessage>(
-        ballotProcessingQueue,
-        async (parsedMessage: BallotMessage) => {
+      await this.rabbitMQService.consumeMessage<BallotResultMessage>(
+        resultsQueue,
+        async (resultMessage: BallotResultMessage) => {
             try {
-                this.logger.log(`Received ballot for processing: ${JSON.stringify(parsedMessage)}`);
+                this.logger.log(`Recibido resultado para acta ${resultMessage.ballotId}, status: ${resultMessage.status}`);
 
                 await this.ballotService.processBallotFromQueue(
-                  parsedMessage.ballotId,
-                  parsedMessage.imageBuffer,
+                  resultMessage.ballotId,
+                  resultMessage,
                 );
 
+              this.logger.log(`Resultado procesado correctamente para acta: ${resultMessage.ballotId}`);
+
             } catch (error) {
-                this.logger.error(`Error processing ballot ${parsedMessage.ballotId}: ${error}`);
+                this.logger.error(`Error processing ballot ${resultMessage.ballotId}: ${error}`);
             }
         }
       );
 
-      this.logger.log(`Consumer successfully set up for queue: ${ballotProcessingQueue}`);
+      this.logger.log(`Consumidor configurado exitosamente para cola de resultados: ${resultsQueue}`);
     } catch (error) {
       this.logger.error(`Error setting up consumer: ${error}`, error);
 
