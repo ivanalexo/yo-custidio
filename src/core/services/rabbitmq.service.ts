@@ -7,6 +7,7 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
+import { resolve } from 'path';
 
 @Injectable()
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
@@ -16,11 +17,16 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   private isConnecting = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
 
-  constructor(private configService: ConfigService) {}
+  private readonly exchangeName: string;
+  private readonly resultQueueName: string;
+
+  constructor(private configService: ConfigService) {
+    this.exchangeName = this.configService.get<string>('app.rabbitmq.exchanges.ballotProcessing', 'ballot_processing_exchange');
+    this.resultQueueName = this.configService.get<string>('app.rabbitmq.queues.results', 'results_queue');
+  }
 
   async onModuleInit() {
     await this.connect();
-    await this.setupQueues();
   }
 
   async onModuleDestroy() {
@@ -60,10 +66,17 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
       this.channel.on('close', () => {
         console.warn('RabbitMQ Channel Closed');
       });
+
+      try {
+        await this.channel.checkExchange(this.exchangeName);
+        this.logger.log(`Exchange ${this.exchangeName} encontado`);
+      } catch (error) {
+        this.logger.warn(`Exchange ${this.exchangeName} no existe, esperando que el worker de python inicie...`);
+      }
       this.logger.log('Successfully connected to RabbitMQ');
       this.isConnecting = false;
     } catch (error) {
-      this.logger.error('Error connecting to RabbitMQ:', error);
+      this.logger.error('Error conectando a RabbitMQ:', error);
       this.isConnecting = false;
       this.scheduleReconnect();
       throw error;
@@ -82,118 +95,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('Attempting to reconnect to RabbitMQ...');
         try {
             await this.connect();
-            if (this.channel) {
-                await this.setupQueues();
-            }
         } catch (error) {
             this.logger.log('Failed reconnecting: ', error);
         }
     }, 5000);
-  }
-  private async setupQueues() {
-    if (!this.channel) {
-        this.logger.error('Cannot setup queues: channel is not available');
-        return;
-    }
-    const queues = this.configService.get<Record<string, string>>(
-      'app.rabbitmq.queues',
-    );
-    const exchanges = this.configService.get<Record<string, string>>(
-      'app.rabbitmq.exchanges',
-    );
-
-    // habilitar Dead Letter Exchange
-    await this.channel.assertExchange('dlx', 'direct', { durable: true });
-
-    if (queues) {
-      this.logger.log(queues);
-      for (const [key, queueName] of Object.entries(queues)) {
-        this.logger.log(`Creando cola: ${queueName}`);
-        await this.channel.assertQueue(queueName, {
-          durable: true,
-          arguments: {
-            'x-dead-letter-exchange': 'dlx',
-            'x-dead-letter-routing-key': `${queueName}.dlq`
-          }
-        });
-
-        // crear cola Dead Letter Queue
-        await this.channel.assertQueue(`${queueName}.dlq`, { durable: true });
-
-        // enlazar DLQ a DLX
-
-        await this.channel.bindQueue(
-          `${queueName}.dlq`,
-          'dlx',
-          `${queueName}.dlq`
-        );
-      }
-    }
-
-    if (exchanges) {
-      this.logger.log(exchanges);
-      for (const [key, exchangeName] of Object.entries(exchanges)) {
-        this.logger.log(`Creando exchange: ${exchangeName}`);
-        await this.channel.assertExchange(exchangeName, 'direct', {
-          durable: true,
-        });
-      }
-    }
-
-    if (queues && exchanges) {
-      const imageProcessingQueue = queues.imageProcessing;
-      const ocrProcessingQueue = queues.ocrProcessing;
-      const ballotProcessingExchange = exchanges.ballotProcessing;
-
-      if (imageProcessingQueue && ballotProcessingExchange) {
-        this.logger.log(
-          `Binding cola ${imageProcessingQueue} a exchange ${ballotProcessingExchange}`,
-        );
-        await this.channel.bindQueue(
-          imageProcessingQueue,
-          ballotProcessingExchange,
-          'image_processing',
-        );
-      }
-
-      if (ocrProcessingQueue && ballotProcessingExchange) {
-        this.logger.log(
-          `Binding cola ${ocrProcessingQueue} a exchange ${ballotProcessingExchange}`,
-        );
-        await this.channel.bindQueue(
-          ocrProcessingQueue,
-          ballotProcessingExchange,
-          'ocr_processing',
-        );
-      }
-    }
-
-    // agregamos cola para Anthropic Fallback
-    const anthropicFallbackQueue = 'anthropic_fallback_queue';
-
-    await this.channel.assertQueue(anthropicFallbackQueue, {
-      durable: true,
-      arguments: {
-        'x-dead-letter-exchange': 'dlx',
-        'x-dead-letter-routing-key': `${anthropicFallbackQueue}.dlq`
-      }
-    });
-
-    await this.channel.assertQueue(`${anthropicFallbackQueue}.dlq`, { durable: true });
-
-    await this.channel.bindQueue(
-      `${anthropicFallbackQueue}.dlq`,
-      'dlx',
-      `${anthropicFallbackQueue}.dlq`
-    );
-
-    if (exchanges && exchanges.ballotProcessing) {
-      await this.channel.bindQueue(
-        anthropicFallbackQueue,
-        exchanges.ballotProcessing,
-        'anthropic_fallback'
-      );
-    }
   }
 
   private async disconnect() {
@@ -213,11 +118,28 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  publishMessage(exchange: string, routingKey: string, message: any) {
+  async publishMessage(exchange: string, routingKey: string, message: any) {
     try {
         if (!this.channel) {
-            this.logger.error('Cannot publish message');
-            return;
+            this.logger.error('No se puede publicar mensaje: Canal nulo');
+            await this.connect();
+            if (!this.channel) {
+              throw new Error('Fallo al crear canal');
+            }
+        }
+
+        try {
+          await this.channel.checkExchange(exchange);
+        } catch (error) {
+          this.logger.error(`Exchange ${exchange} no existe. Esperando 2 segundos y reintentar...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          try {
+            await this.channel.checkExchange(exchange);
+        } catch (secondError) {
+            this.logger.error(`Exchange ${exchange} sigue sin existir. Mensaje no publicado.`);
+            return false;
+        }
         }
 
       this.logger.log(`Publicando mensaje a ${exchange}:${routingKey}`);
@@ -238,7 +160,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   async consumeMessage<T>(
     queue: string,
     callback: (message: T) => Promise<void>,
-  ) {
+  ): Promise<{ consumerTag: string}> {
     const setupConsumer = async () => {
       try {
         if (!this.channel) {
@@ -248,7 +170,17 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
-        return await this.channel.consume(
+        // verificar que la cola exista antes de consumir
+
+        try {
+          await this.channel.checkQueue(queue);
+        } catch (error) {
+          this.logger.error(`Cola ${queue} no existe. Esperando a que sea creada...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          return setupConsumer();
+        }
+
+        const { consumerTag } = await this.channel.consume(
           queue,
           async (message) => {
             if (!message) return;
@@ -264,12 +196,12 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
                 if (this.channel) {
                   this.channel.ack(message);
                 } else {
-                  this.logger.warn('Cannot acknowledge message: channel is null');
+                  this.logger.warn('No se puede reconocer el mensaje: canal es null');
                   await this.connect();
                   await setupConsumer();
                 }
               } catch (ackError) {
-                this.logger.error('Error acknowledging message, channel might be closed:', ackError);
+                this.logger.error('Error reconociendo mensaje, el canal pudo haberse cerrado:', ackError);
                 // Si hay un error al hacer ack, intentamos reconectar
                 await this.connect();
                 await setupConsumer();
@@ -295,6 +227,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           },
           { noAck: false },
         );
+        return { consumerTag };
       } catch (error) {
         this.logger.error('Error setting up consumer:', error);
 
