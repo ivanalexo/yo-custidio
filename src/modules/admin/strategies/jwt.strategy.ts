@@ -10,29 +10,29 @@ import { UserData } from '../services/auth.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor(
-        private configService: ConfigService,
-        @InjectModel(User.name) private userModel: Model<UserDocument>,
-    ) {
-        super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ignoreExpiration: false,
-            secretOrKey: configService.get<string>('app.jwt.secret')!,
-        });
+  constructor(
+    private configService: ConfigService,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+  ) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: configService.get<string>('app.jwt.secret')!,
+    });
+  }
+
+  async validate(payload: UserData) {
+    const user = await this.userModel.findById(payload.sub).exec();
+
+    if (!user || !user.active) {
+      throw new UnauthorizedException();
     }
 
-    async validate(payload: UserData) {
-        const user = await this.userModel.findById(payload.sub).exec();
-
-        if (!user || !user.active) {
-            throw new UnauthorizedException();
-        }
-
-        return {
-            userId: payload.id,
-            email: payload.email,
-            name: payload.name,
-            role: payload.role,
-        }
-    }
+    return {
+      userId: payload.id,
+      email: payload.email,
+      name: payload.name,
+      role: payload.role,
+    };
+  }
 }

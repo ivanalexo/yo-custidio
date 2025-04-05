@@ -37,7 +37,9 @@ export class ResultsController {
   }
 
   @Get('parties')
-  @ApiOperation({ summary: 'Obtener resultados agrupados por partido político' })
+  @ApiOperation({
+    summary: 'Obtener resultados agrupados por partido político',
+  })
   async getResultsByParty() {
     this.logger.log('Consultando resultados por partido político');
     return this.resultsService.getResultsByParty();

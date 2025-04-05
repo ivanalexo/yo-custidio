@@ -33,6 +33,8 @@
     "@nestjs/swagger": "^11.0.5",
     "@types/amqplib": "^0.10.6",
     "@types/redis": "^4.0.10",
+    "@wagmi/connectors": "^5.7.12",
+    "@wagmi/core": "^2.16.7",
     "amqplib": "^0.10.5",
     "axios": "^1.8.1",
     "bcryptjs": "^3.0.2",
@@ -49,7 +51,8 @@
     "redis": "^4.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "viem": "^2.25.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
