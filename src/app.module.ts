@@ -9,6 +9,7 @@ import { RabbitMQService } from './core/services/rabbitmq.service';
 import appConfig from './config/app.config';
 import { BallotProcessingModule } from './modules/ballot-processing/ballot-processing.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { Web3Module } from './modules/web3/web3.module';
 import { CoreModule } from './core/core.module';
 
 @Module({
@@ -42,6 +43,7 @@ import { CoreModule } from './core/core.module';
     CoreModule,
     BallotProcessingModule,
     AdminModule,
+    Web3Module,
   ],
   controllers: [],
   providers: [],

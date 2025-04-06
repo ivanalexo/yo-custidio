@@ -18,38 +18,41 @@ import { CoreModule } from '../../core/core.module';
 import { BallotConsumerService } from './services/ballot-consumer.service';
 
 @Module({
-    imports: [
-        ConfigModule,
-        CoreModule,
-        MongooseModule.forFeature([
-            { name: Ballot.name, schema: BallotSchema},
-        ]),
-        MulterModule.register({
-            limits: {
-                fileSize: 20 * 1024 * 1024,
-                fieldSize: 20 * 1024 * 1024,
-            },
-        }),
-        CacheModule.registerAsync({
-            imports: [ConfigModule],
-            useFactory: (configService: ConfigService) => ({
-                store: redisStore,
-                host: configService.get('app.redis.host'),
-                port: configService.get('app.redis.port'),
-                ttl: configService.get('app.cache.ttl') *  1000,
-            }),
-            inject: [ConfigService],
-        }),
-    ],
-    controllers: [BallotController, ResultsController],
-    providers: [
-        RabbitMQService,
-        BallotService,
-        ImageProcessingService,
-        DataExtractionService,
-        BallotConsumerService,
-        ResultsService,
-    ],
-    exports: [BallotService, ImageProcessingService, DataExtractionService, ResultsService],
+  imports: [
+    ConfigModule,
+    CoreModule,
+    MongooseModule.forFeature([{ name: Ballot.name, schema: BallotSchema }]),
+    MulterModule.register({
+      limits: {
+        fileSize: 20 * 1024 * 1024,
+        fieldSize: 20 * 1024 * 1024,
+      },
+    }),
+    CacheModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        store: redisStore,
+        host: configService.get('app.redis.host'),
+        port: configService.get('app.redis.port'),
+        ttl: configService.get('app.cache.ttl') * 1000,
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+  controllers: [BallotController, ResultsController],
+  providers: [
+    RabbitMQService,
+    BallotService,
+    ImageProcessingService,
+    DataExtractionService,
+    BallotConsumerService,
+    ResultsService,
+  ],
+  exports: [
+    BallotService,
+    ImageProcessingService,
+    DataExtractionService,
+    ResultsService,
+  ],
 })
 export class BallotProcessingModule {}

@@ -1,0 +1,7 @@
+name: yo-custodio
+
+plugins:
+  - name: vyper
+  - name: etherscan
+  - name: sonic
+  - name: foundry
