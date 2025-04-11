@@ -11,6 +11,7 @@ import { Ballot, BallotDocument } from '../schemas/ballot.schema';
 import { CreateBallotDto } from '../dto/create-ballot.dto';
 import { randomUUID } from 'crypto';
 import { DataExtractionService } from './data-extraction.service';
+import { RealtimeService } from 'src/core/services/realtime.service';
 
 @Injectable()
 export class BallotService {
@@ -22,6 +23,7 @@ export class BallotService {
     private rabbitMQService: RabbitMQService,
     private imageProcessingService: ImageProcessingService,
     private dataExtractionService: DataExtractionService,
+    private realtimeService: RealtimeService,
   ) {}
 
   async createBallot(
@@ -96,7 +98,7 @@ export class BallotService {
       )!;
       this.logger.log(`Enviando a cola: ${exchangeName} - image_processing`);
 
-      this.rabbitMQService.publishMessage(
+      await this.rabbitMQService.publishMessage(
         this.configService.get<string>(
           'app.rabbitmq.exchanges.ballotProcessing',
         )!,
@@ -107,6 +109,15 @@ export class BallotService {
           confidence: validation.confidence,
         },
       );
+
+      await this.realtimeService.publish('processing', {
+        ballotId: savedBallot._id,
+        status: 'RECEIVED',
+        timestamp: new Date(),
+        metadata: {
+          tableNumber: savedBallot.tableNumber,
+        }
+      });
 
       return {
         trackingId: savedBallot._id,
@@ -186,6 +197,15 @@ export class BallotService {
         notes: '',
       };
 
+      await this.realtimeService.publish('processing', {
+        ballotId: ballotId,
+        status: resultData.status,
+        timestamp: new Date(),
+        metadata: {
+          tableNumber: ballot.tableNumber,
+        }
+      })
+
       switch (resultData.status) {
         case 'COMPLETED':
           // Actualizar datos de votos si están disponibles
@@ -216,6 +236,14 @@ export class BallotService {
           this.logger.log(
             `Acta ${ballotId} procesada con éxito, confianza: ${ballot.processingStatus.confidenceScore}`,
           );
+
+          await this.realtimeService.publish('results', {
+            ballotId: ballotId,
+            tableNumber: ballot.tableNumber,
+            votes: ballot.votes,
+            timestamp: new Date(),
+          });
+
           break;
 
         case 'EXTRACTION_FAILED':
@@ -284,6 +312,13 @@ export class BallotService {
       this.logger.error(
         `Error procesando resultado para acta ${ballotId}: ${error}`,
       );
+
+      await this.realtimeService.publish('processing', {
+        ballotId: ballotId,
+        status: 'ERROR',
+        timestamp: new Date(),
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
 
       // Intentar actualizar el estado a ERROR en caso de fallo
       try {

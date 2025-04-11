@@ -12,6 +12,7 @@ import {
   CreateLocationDto,
   UpdateLocationDto,
 } from '../dto/electoral-location.dto';
+import { RealtimeService } from 'src/core/services/realtime.service';
 
 @Injectable()
 export class ElectoralLocationService {
@@ -20,6 +21,7 @@ export class ElectoralLocationService {
   constructor(
     @InjectModel(ElectoralLocation.name)
     private locationModel: Model<LocationDocument>,
+    private realtimeService: RealtimeService,
   ) {}
 
   async create(
@@ -33,6 +35,15 @@ export class ElectoralLocationService {
 
     const savedLocation = await newLocation.save();
     this.logger.log(`Recinto electoral creado: ${savedLocation.code}`);
+
+    // podriamos quitar esto de la DB cache...
+    await this.realtimeService.publish('locations', {
+      action: 'created',
+      locationId: savedLocation._id,
+      code: savedLocation.code,
+      name: savedLocation.name,
+      timestamp: new Date(),
+    });
 
     return savedLocation;
   }

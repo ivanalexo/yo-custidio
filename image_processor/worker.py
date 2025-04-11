@@ -10,6 +10,7 @@ import time
 import threading
 import logging
 from algorithms.extractor import BallotExtractor
+from algorithms.processing import check_if_ballot
 
 # Configurar logging
 logging.basicConfig(
@@ -135,7 +136,7 @@ def process_image_validation(ch, method, properties, body):
         
         # 3. Validar si es un acta electoral
 
-        is_valid, confidence, reason = ballot_extractor.check_if_ballot(processed_img)
+        is_valid, confidence, reason = check_if_ballot(processed_img)
         
         if is_valid:
             # Si es válida, publicar a la cola de OCR
