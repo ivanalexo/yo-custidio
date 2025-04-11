@@ -94,57 +94,103 @@ def extract_roi(image, roi_info):
     return image[y:y+h, x:x+w]
 
 def extract_text_from_region(roi, mode='text'):
-    """Extrae texto de una región usando OCR"""
+    """Extrae texto de una región usando OCR con configuración optimizada"""
     if roi.size == 0:
         return ""
     
-    # Aplicar optimizaciones específicas según el tipo de texto
+    # Aplicar optimizaciones según el tipo de texto
     if mode == 'numeric':
-        # Optimizar para dígitos
-        roi = preprocess_digits(roi)
+        # Configuración especial para dígitos
+        processed_roi = preprocess_digits(roi)
+        
+        # Configuración específica para dígitos
         config = r'--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789 -l spa'
+        
+        # Realizar múltiples pases con diferentes configuraciones y elegir el mejor resultado
+        results = []
+        
+        # Pase 1: Configuración estándar
+        text1 = pytesseract.image_to_string(processed_roi, config=config)
+        if text1.strip() and text1.strip().isdigit():
+            results.append(text1.strip())
+        
+        # Pase 2: Invertir colores
+        inverted_roi = cv2.bitwise_not(processed_roi)
+        text2 = pytesseract.image_to_string(inverted_roi, config=config)
+        if text2.strip() and text2.strip().isdigit():
+            results.append(text2.strip())
+        
+        # Pase 3: Cambiar modo PSM a 8 (un solo word)
+        config3 = r'--oem 1 --psm 8 -c tessedit_char_whitelist=0123456789 -l spa'
+        text3 = pytesseract.image_to_string(processed_roi, config=config3)
+        if text3.strip() and text3.strip().isdigit():
+            results.append(text3.strip())
+        
+        # Pase 4: Redimensionar x2
+        h, w = processed_roi.shape
+        enlarged_roi = cv2.resize(processed_roi, (w*2, h*2), interpolation=cv2.INTER_CUBIC)
+        text4 = pytesseract.image_to_string(enlarged_roi, config=config)
+        if text4.strip() and text4.strip().isdigit():
+            results.append(text4.strip())
+        
+        # Elegir el resultado más probable
+        if not results:
+            return ""
+            
+        # Si hay múltiples resultados, elegir el más frecuente
+        from collections import Counter
+        counter = Counter(results)
+        most_common = counter.most_common(1)[0][0]
+        return most_common
     else:
         # Optimizar para texto general
-        roi = preprocess_text(roi)
-        config = r'--oem 1 --psm 6 -l spa'
-    
-    # Aplicar OCR
-    text = pytesseract.image_to_string(roi, config=config)
-    
-    # Limpiar resultado
-    text = clean_text(text, mode)
-    
-    return text
+        processed_roi = preprocess_text(roi)
+        
+        # Configuración para texto general
+        config = r'--oem 1 --psm 6 -l spa+eng'
+        text = pytesseract.image_to_string(processed_roi, config=config)
+        
+        # Limpiar resultado
+        text = clean_text(text, mode)
+        
+        return text
 
 def preprocess_digits(image):
     """Optimiza una imagen para reconocimiento de dígitos"""
     # 1. Redimensionar (ampliar) para mejor reconocimiento
     height, width = image.shape
-    resized = cv2.resize(image, (width*3, height*3), interpolation=cv2.INTER_CUBIC)
+    scale_factor = 4  # Aumentar el factor de escala
+    resized = cv2.resize(image, (width*scale_factor, height*scale_factor), interpolation=cv2.INTER_CUBIC)
     
-    # 2. Mejorar contraste
+    # 2. Aplicar filtro bilateral para reducir ruido pero mantener bordes
+    denoised = cv2.bilateralFilter(resized, 9, 75, 75)
+    
+    # 3. Mejorar contraste
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(resized)
+    enhanced = clahe.apply(denoised)
 
-    # 3. Binarizar usando umbral adaptativo con parametros optimizados
-    binary = cv2.adaptiveThreshold(
-        resized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 8
+    # 4. Binarizar con umbral de Otsu
+    _, otsu = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # 5. También binarizar con umbral adaptativo
+    adaptive = cv2.adaptiveThreshold(
+        enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 10
     )
     
-    # 4. Eliminar ruido
-    kernel = np.ones((2, 2), np.uint8)
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    # 6. Combinar ambos resultados para mayor robustez
+    combined = cv2.bitwise_or(otsu, adaptive)
     
-    # 5. Dilatar ligeramente para conectar partes de dígitos
+    # 7. Eliminar ruido pequeño
+    kernel = np.ones((2, 2), np.uint8)
+    cleaned = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel)
+    
+    # 8. Dilatar ligeramente para conectar partes de dígitos
     dilated = cv2.dilate(cleaned, kernel, iterations=1)
     
-    # 6. suavizar bordes
-    smoothed = cv2.GaussianBlur(dilated, (3, 3), 0)
+    # 9. Aplicar cierre morfológico para llenar huecos dentro de los dígitos
+    closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
     
-    # 7. Binarizar otra vez para obtener pixeles claros
-    _, final = cv2.threshold(smoothed, 127, 255, cv2.THRESH_BINARY)
-    
-    return final
+    return closed
 
 def preprocess_text(image):
     """Optimiza una imagen para reconocimiento de texto general"""

@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import { Cache } from 'cache-manager';
+import { RealtimeService } from 'src/core/services/realtime.service';
 
 // Definir interfaces para los tipos de respuesta
 export interface PartyResult {
@@ -90,6 +91,7 @@ export class ResultsService {
     @InjectModel(Ballot.name) private ballotModel: Model<BallotDocument>,
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private realtimeService: RealtimeService,
   ) {
     this.cacheEnabled = this.configService.get<boolean>(
       'app.cache.enabled',
@@ -200,6 +202,13 @@ export class ResultsService {
     if (this.cacheEnabled) {
       await this.cacheManager.set(cacheKey, response, this.cacheTTL * 1000);
     }
+
+    await this.realtimeService.publishResults({
+      results: response.results,
+      totals: response.totals,
+      filters: response.filters,
+      timestamp: response.generatedAt,
+    });
 
     return response;
   }
@@ -416,6 +425,12 @@ export class ResultsService {
     if (this.cacheEnabled) {
       await this.cacheManager.set(cacheKey, response, 60 * 1000); // 1 minuto
     }
+
+    await this.realtimeService.publishStats({
+      processingStatus: response.processingStatus,
+      votingStatistics: response.votingStatistics,
+      timestamp: response.generatedAt,
+    });
 
     return response;
   }

@@ -14,23 +14,41 @@ def preprocess_image(image):
     
     # 2. Redimensionar a tamaño óptimo si es muy grande
     height, width = gray.shape
-    if height > 2000 or width > 2000:
-        scale = min(2000/width, 2000/height)
+    target_dpi = 300 # DPI optimo para OCR
+    if height > 3000 or width > 3000:
+        scale = min(3000/width, 3000/height)
         new_width = int(width * scale)
         new_height = int(height * scale)
-        gray = cv2.resize(gray, (new_width, new_height))
+        gray = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    elif height < 1000 or width < 1000:
+        # si la images es muy pequenia, ampliarla para mejor deteccion
+        scale = max(1000/width, 1000/height)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        gray = cv2.resize(gray, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
     
     # 3. Corrección de perspectiva si es necesario
     gray = correct_perspective(gray)
     
-    # 4. Mejorar contraste con ecualización adaptativa de histograma
+    # 4. reducir ruido antes de mejorar contraste
+    denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+    
+    # 5. Mejorar contraste con ecualización adaptativa de histograma
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
+    enhanced = clahe.apply(denoised)
     
-    # 5. Reducir ruido
-    denoised = cv2.fastNlMeansDenoising(enhanced, None, 10, 7, 21)
+    # 6. Ampliar umbralizacion adaptativa para mejorar texto
+    binary = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                  cv2.THRESH_BINARY, 11, 2)
     
-    return denoised
+    #7. Operaciones morfologicas para limpiar ruido menor
+    kernel = np.ones((1, 1), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    
+    # 8. Cambiar imagen original con binarizada para mejore resultado
+    result = cv2.bitwise_not(binary)
+    
+    return result
 
 def correct_perspective(image):
     """Corrección de perspectiva para enderezar el documento"""

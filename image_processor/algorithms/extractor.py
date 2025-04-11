@@ -45,7 +45,7 @@ class BallotExtractor:
             processed_img = preprocess_image(gray)
             
             # 5. Verificar si es un acta electoral
-            is_valid, confidence, reason = self.check_if_ballot(processed_img)
+            is_valid, confidence, reason = check_if_ballot(processed_img)
             
             if not is_valid and not self.anthropic_enabled:
                 return {
@@ -99,46 +99,3 @@ class BallotExtractor:
                 'errorMessage': str(e),
                 'details': error_details
             }
-
-    def check_if_ballot(self, image):
-        """Verifica si una imagen es un acta electoral"""
-        try:
-            # 1. Verificar presencia de tablas/grillas
-            from algorithms.template_matching import locate_table_structure
-            table_coords = locate_table_structure(image)
-            has_table = table_coords[2] > 0 and table_coords[3] > 0
-            
-            # 2. Verificar logo OEP
-            from algorithms.template_matching import locate_oep_logo
-            logo_coords = locate_oep_logo(image)
-            has_logo = logo_coords[2] > 0 and logo_coords[3] > 0
-            
-            # 3. Verificar códigos de barras
-            from algorithms.template_matching import locate_barcodes
-            barcodes = locate_barcodes(image)
-            has_barcodes = len(barcodes) > 0
-            
-            # Calcular confianza
-            confidence_scores = [
-                0.6 if has_table else 0.1,
-                0.8 if has_logo else 0.2,
-                0.5 if has_barcodes else 0.2
-            ]
-            
-            overall_confidence = sum(confidence_scores) / len(confidence_scores)
-            is_valid = overall_confidence >= 0.5  # Umbral de decisión
-            
-            # Añadir razón para el rechazo (AQUÍ ESTÁ EL CAMBIO)
-            reason = ""
-            if not is_valid:
-                if not has_table:
-                    reason = "No se detectó estructura de tabla electoral"
-                elif not has_logo:
-                    reason = "No se detectó logo oficial"
-                else:
-                    reason = "La imagen no parece ser un acta electoral"
-                
-            return is_valid, overall_confidence, reason
-        except Exception as e:
-            print(f"Error verificando acta: {e}")
-            return False, 0.0, f"Error técnico: {str(e)}"

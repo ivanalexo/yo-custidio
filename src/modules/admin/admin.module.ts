@@ -13,11 +13,13 @@ import { ElectoralLocationService } from './services/electoral-location.service'
 
 import { JwtStrategy } from './strategies/jwt.strategy';
 
+import { CoreModule } from '../../core/core.module';
 import { User, UserSchema } from './schemas/user.schema';
 import { ElectoralLocation, LocationSchema } from './schemas/electoral-location.schema';
 
 @Module({
     imports: [
+        CoreModule,
         MongooseModule.forFeature([
             { name: User.name, schema: UserSchema },
             { name: ElectoralLocation.name, schema: LocationSchema },

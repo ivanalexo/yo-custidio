@@ -10,6 +10,7 @@ import appConfig from './config/app.config';
 import { BallotProcessingModule } from './modules/ballot-processing/ballot-processing.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CoreModule } from './core/core.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { CoreModule } from './core/core.module';
     CoreModule,
     BallotProcessingModule,
     AdminModule,
+    RealtimeModule,
   ],
   controllers: [],
   providers: [],
