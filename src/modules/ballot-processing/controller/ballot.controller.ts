@@ -83,14 +83,16 @@ export class BallotController {
     );
 
     if (!file) {
-        throw new BadRequestException('No se ha proporcionado ningun archivo');
+      throw new BadRequestException('No se ha proporcionado ningun archivo');
     }
 
     if (!file.buffer || file.buffer.length === 0) {
-        throw new BadRequestException('El archivo esta vacio o no es valido');
+      throw new BadRequestException('El archivo esta vacio o no es valido');
     }
 
-    this.logger.log(`Archivo recibido: ${file.originalname}, tamanio: ${file.buffer.length}`);
+    this.logger.log(
+      `Archivo recibido: ${file.originalname}, tamanio: ${file.buffer.length}`,
+    );
 
     const clientInfo = {
       ipAddress: request.ip || 'unknown',
