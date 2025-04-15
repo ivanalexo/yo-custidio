@@ -11,6 +11,7 @@ class AnthropicExtractor:
         self.api_key = os.environ.get('ANTHROPIC_API_KEY', '')
         self.model = os.environ.get('ANTHROPIC_MODEL', 'claude-3-7-sonnet-20250219')
         self.api_url = 'https://api.anthropic.com/v1/messages'
+        self.confidence_threshold = 0.7
     
     def extract_data_from_image(self, image_buffer):
         """Extrae datos de un acta electoral usando Anthropic API"""
@@ -30,8 +31,14 @@ class AnthropicExtractor:
         Por favor, extrae la siguiente información de esta imagen de acta electoral:
 
         1. Código/Número de mesa
+        2. Información geográfica:
+            - Departamento
+            - Provincia
+            - Municipio
+            - Localidad
+            - Recinto
         Solo de la sección que dice PRESIDENTE/A
-        2. Información de votos:
+        3. Información de votos:
            - Votos válidos (total)
            - Votos nulos
            - Votos blancos
@@ -41,6 +48,13 @@ class AnthropicExtractor:
 
         {
           "tableNumber": "string",
+          "location": {
+            "department": "string",
+            "province": "string",
+            "municipality": "string",
+            "locality": "string",
+            "pollingPlace": "string"
+          },
           "votes": {
             "validVotes": number,
             "nullVotes": number,
@@ -51,10 +65,18 @@ class AnthropicExtractor:
                 "votes": number
               }
             ]
-          }
+          },
+          "confidence": number
         }
 
-        Incluye SOLO datos que puedas ver claramente en la imagen. Si no puedes ver algún valor, déjalo como null o 0.
+        El campo "confidence" debe ser un valor entre 0 y 1 que refleje tu nivel de confianza en la extracción:
+        - 1.0: Completamente seguro de todos los datos
+        - 0.7-0.9: Bastante seguro pero podrían haber pequeños errores
+        - 0.4-0.6: Varios elementos poco claros o difíciles de leer
+        - 0.0-0.3: Imagen ilegible o muchos datos no extraíbles
+
+        Si la imagen está borrosa, mal orientada o tiene poca calidad, reduce el nivel de confianza.
+        Sea honesto con este valor para identificar cuando se requiere verificación humana.
         """
 
         try:
@@ -110,11 +132,16 @@ class AnthropicExtractor:
                 raise ValueError("No se encontró JSON en la respuesta")
 
             extracted_data = json.loads(json_match.group(1))
+            confidence = extracted_data.get('confidence', 0.5)
+            
+            if 'confidence' in extracted_data:
+                del extracted_data['confidence']
 
             return {
                 'results': extracted_data,
-                'confidence': 0.9,  # Alta confianza para respuestas de Anthropic
-                'source': 'anthropic'
+                'confidence': float(confidence),  # Alta confianza para respuestas de Anthropic
+                'source': 'anthropic',
+                'needsHumanVerification': float(confidence) < self.confidence_threshold
             }
         except requests.exceptions.HTTPError as e:
             logger = logging.getLogger('AnthropicExtractor')

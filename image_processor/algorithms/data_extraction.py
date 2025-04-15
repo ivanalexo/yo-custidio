@@ -24,7 +24,26 @@ def extract_data_from_ballot(image):
     data['tableNumber'] = table_number
     confidence_scores['tableNumber'] = calculate_confidence(code_roi)
     
-    # 3.2 Extraer votos por partido
+        # NUEVO: 3.2 Extraer información de ubicación
+    department_roi = extract_roi(processed_image, roi_map['departamento'])
+    department = extract_text_from_region(department_roi, 'text')
+    confidence_scores['departamento'] = calculate_confidence(department_roi)
+    
+    province_roi = extract_roi(processed_image, roi_map['provincia'])
+    province = extract_text_from_region(province_roi, 'text')
+    confidence_scores['provincia'] = calculate_confidence(province_roi)
+    
+    
+    municipality_roi = extract_roi(processed_image, roi_map['municipio'])
+    municipality = extract_text_from_region(municipality_roi, 'text')
+    confidence_scores['municipio'] = calculate_confidence(municipality_roi)
+    
+    
+    venue_roi = extract_roi(processed_image, roi_map['recinto'])
+    venue = extract_text_from_region(venue_roi, 'text')
+    confidence_scores['recinto'] = calculate_confidence(venue_roi)
+    
+    # 3.3 Extraer votos por partido
     party_votes = []
     party_keys = [key for key in roi_map.keys() if key.startswith('partido_')]
     
@@ -45,7 +64,7 @@ def extract_data_from_ballot(image):
             'confidence': confidence
         })
     
-    # 3.3 Extraer totales
+    # 3.4 Extraer totales
     valid_roi = extract_roi(processed_image, roi_map['votos_validos'])
     valid_votes = extract_text_from_region(valid_roi, 'numeric')
     valid_confidence = calculate_confidence(valid_roi)
@@ -59,6 +78,13 @@ def extract_data_from_ballot(image):
     null_confidence = calculate_confidence(null_roi)
     
     # 4. Estructurar datos
+    data['tableNumber'] = table_number
+    data['location'] = {
+        'department': department,
+        'province': province,
+        'municipality': municipality,
+        'venue': venue
+    }
     data['votes'] = {
         'partyVotes': party_votes,
         'validVotes': int(valid_votes) if valid_votes.strip() and valid_votes.isdigit() else 0,
@@ -74,18 +100,22 @@ def extract_data_from_ballot(image):
     consistency_score = verify_data_consistency(data)
     avg_confidence = sum([
         confidence_scores['tableNumber'],
+        confidence_scores['departamento'],
+        confidence_scores['provincia'],
+        confidence_scores['municipio'],
+        confidence_scores['recinto'],
         valid_confidence,
         blank_confidence,
         null_confidence,
         *[pv['confidence'] for pv in party_votes]
-    ]) / (4 + len(party_votes))
+    ]) / (8 + len(party_votes))
     
     overall_confidence = avg_confidence * consistency_score
     
     return {
         'results': data,
         'confidence': overall_confidence,
-        'needsManualVerification': overall_confidence < 0.7
+        'needsHumanVerification': overall_confidence < 0.7
     }
 
 def extract_roi(image, roi_info):

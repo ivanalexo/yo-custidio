@@ -45,6 +45,12 @@ export class Ballot {
     address?: string;
   };
 
+  @Prop({ type: Number, default: 0, min: 0, max: 1 })
+  confidence: number;
+
+  @Prop({ type: Boolean, default: false })
+  needsHumanVerification: boolean;
+
   @Prop()
   verificationCode: string;
 
