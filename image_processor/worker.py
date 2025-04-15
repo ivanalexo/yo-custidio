@@ -235,7 +235,7 @@ def process_ocr_extraction(ch, method, properties, body):
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
-        elif extraction_result['confidence'] < 0.7 and 'anthropic' not in extraction_result.get('source', ''):
+        elif extraction_result['confidence'] < 0.8 and 'anthropic' not in extraction_result.get('source', ''):
             # Si la confianza es baja y no viene de Anthropic, enviar a fallback
             logger.info(f"Baja confianza en extracción ({extraction_result['confidence']:.2f}), enviando a Anthropic")
             channel.basic_publish(
@@ -259,11 +259,12 @@ def process_ocr_extraction(ch, method, properties, body):
                     'status': 'COMPLETED',
                     'results': {
                         'tableNumber': extraction_result['tableNumber'],
-                        'votes': extraction_result['votes']
+                        'votes': extraction_result['votes'],
+                        'location': extraction_result.get('location', {})
                     },
                     'confidence': extraction_result['confidence'],
                     'source': extraction_result.get('source', 'ocr'),
-                    'needsVerification': extraction_result.get('needsVerification', False)
+                    'needsHumanVerification': extraction_result.get('needsHumanVerification', extraction_result['confidence'] < 0.7)
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
             )

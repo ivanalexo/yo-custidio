@@ -1,4 +1,5 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 // src/modules/ballot-processing/controllers/results.controller.ts
 import { Controller, Get, Query, Param, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
@@ -48,5 +49,12 @@ export class ResultsController {
   async getStatistics() {
     this.logger.log('Consultando estadísticas del sistema');
     return this.resultsService.getSystemStatistics();
+  }
+
+  @Get('verification-needed')
+  @ApiOperation({ summary: 'Obtener actas que requiren verificaion' })
+  async getBallotPendingVerification() {
+    this.logger.log('Consultando actas que requiren verificacion...');
+    return this.resultsService.getBallotsPendingVerification();
   }
 }

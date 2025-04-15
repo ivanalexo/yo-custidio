@@ -7,15 +7,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AuthController } from './controller/auth.controller';
 import { ElectoralLocationController } from './controller/electoral-location-controller';
+import { PoliticalPartyController } from './controller/political-party.controller';
 
 import { AuthService } from './services/auth.service';
 import { ElectoralLocationService } from './services/electoral-location.service';
+import { PoliticalPartyService } from './services/political-party.service';
 
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 import { CoreModule } from '../../core/core.module';
 import { User, UserSchema } from './schemas/user.schema';
 import { ElectoralLocation, LocationSchema } from './schemas/electoral-location.schema';
+import { PoliticalParty, PoliticalPartySchema } from './schemas/political-party.schema';
 
 @Module({
     imports: [
@@ -23,6 +26,7 @@ import { ElectoralLocation, LocationSchema } from './schemas/electoral-location.
         MongooseModule.forFeature([
             { name: User.name, schema: UserSchema },
             { name: ElectoralLocation.name, schema: LocationSchema },
+            { name: PoliticalParty.name, schema: PoliticalPartySchema },
         ]),
         PassportModule.register({ defaultStrategy: 'jwt' }),
         JwtModule.registerAsync({
@@ -36,8 +40,8 @@ import { ElectoralLocation, LocationSchema } from './schemas/electoral-location.
             inject: [ConfigService],
         }),
     ],
-    controllers: [AuthController, ElectoralLocationController],
-    providers: [AuthService, ElectoralLocationService, JwtStrategy],
-    exports: [AuthService, ElectoralLocationService],
+    controllers: [AuthController, ElectoralLocationController, PoliticalPartyController],
+    providers: [AuthService, ElectoralLocationService, PoliticalPartyService, JwtStrategy],
+    exports: [AuthService, ElectoralLocationService, PoliticalPartyService],
 })
 export class AdminModule {}

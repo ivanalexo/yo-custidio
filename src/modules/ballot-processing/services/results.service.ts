@@ -13,6 +13,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import { Cache } from 'cache-manager';
 import { RealtimeService } from 'src/core/services/realtime.service';
+import { PoliticalParty, PoliticalPartyDocument } from 'src/modules/admin/schemas/political-party.schema';
 
 // Definir interfaces para los tipos de respuesta
 export interface PartyResult {
@@ -89,6 +90,7 @@ export class ResultsService {
 
   constructor(
     @InjectModel(Ballot.name) private ballotModel: Model<BallotDocument>,
+    @InjectModel(PoliticalParty.name) private partyModel: Model<PoliticalPartyDocument>,
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private realtimeService: RealtimeService,
@@ -311,8 +313,32 @@ export class ResultsService {
       percentage: totalVotes > 0 ? (party.totalVotes / totalVotes) * 100 : 0,
     }));
 
+    const enrichedResults = await Promise.all(
+      partiesWithPercentages.map(async (party) => {
+        try {
+          const partyDetails = await this.partyModel.findOne({
+            partyId: party.partyId
+          });
+
+          if (partyDetails) {
+            return {
+              ...party,
+              fullName: partyDetails.fullName,
+              logoUrl: partyDetails.logoUrl,
+              color: partyDetails.color || '#CCCCCC', // Color por defecto
+            };
+          }
+        } catch (error) {
+          this.logger.warn(`Error al enriquecer partido ${party.partyId}: ${error.message}`);
+        }
+
+        // Si no hay detalles, devolver sin modificar
+        return party;
+      })
+    );
+
     const response: PartyResults = {
-      parties: partiesWithPercentages,
+      parties: enrichedResults,
       generatedAt: new Date(),
     };
 
@@ -433,5 +459,28 @@ export class ResultsService {
     });
 
     return response;
+  }
+
+  async getBallotsPendingVerification(): Promise<any> {
+    const pendingBallots = await this.ballotModel.find({
+      needsHumanVerification: true,
+      'processingStatus.stage': { $ne: 'REJECTED' },
+    })
+    .select('tableNumber confidence processingStatus location updatedAt')
+    .sort({ confidence: 1 })
+    .limit(100)
+    .exec();
+
+    return {
+      total: pendingBallots.length,
+      ballots: pendingBallots.map(ballot => ({
+        id: ballot._id,
+        tableNumber: ballot.tableNumber,
+        confidence: ballot.confidence,
+        location: ballot.location,
+        status: ballot.processingStatus.stage,
+        updatedAt: ballot.updatedAt,
+      }))
+    };
   }
 }

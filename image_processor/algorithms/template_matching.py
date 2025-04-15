@@ -109,7 +109,37 @@ def generate_roi_map(image, logo_coords, barcode_coords, table_coords):
             'w': int(width * 0.15),
             'h': int(height * 0.05)
         },
-        
+        # Regiones de ubicacion
+        'departamento': {
+            'x': int(width * 0.28),
+            'y': int(height * 0.14),
+            'w': int(width * 0.15),
+            'h': int(height * 0.03)
+        },
+                'provincia': {
+            'x': int(width * 0.28),
+            'y': int(height * 0.15),
+            'w': int(width * 0.15),
+            'h': int(height * 0.03)
+        },
+        'municipio': {
+            'x': int(width * 0.28),
+            'y': int(height * 0.16),
+            'w': int(width * 0.15),
+            'h': int(height * 0.03)
+        },
+        'localidad': {
+            'x': int(width * 0.28),
+            'y': int(height * 0.17),
+            'w': int(width * 0.15),
+            'h': int(height * 0.03)
+        },
+        'recinto': {
+            'x': int(width * 0.28),
+            'y': int(height * 0.18),
+            'w': int(width * 0.15),
+            'h': int(height * 0.03)
+        },
         # Título Presidente/a (columna izquierda)
         'presidente': {
             'x': int(width * 0.2),

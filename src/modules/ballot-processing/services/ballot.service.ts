@@ -209,6 +209,15 @@ export class BallotService {
       switch (resultData.status) {
         case 'COMPLETED':
           // Actualizar datos de votos si están disponibles
+          ballot.confidence = resultData.confidence || 0;
+          ballot.needsHumanVerification = resultData.needsHumanVerification || (resultData.confidence < 0.7);
+
+          historyEntry.notes = `Acta procesada correctamente (fuente: ${resultData.source || 'unknown'}, confianza: ${ballot.confidence.toFixed(2)})`;
+
+          if (ballot.needsHumanVerification) {
+            historyEntry.notes += '. Require verificacion humana.';
+            ballot.processingStatus.stage = 'VALIDATION_PENDING';
+          }
           if (resultData.results) {
             ballot.votes = {
               validVotes: resultData.results.votes?.validVotes || 0,
@@ -216,6 +225,15 @@ export class BallotService {
               blankVotes: resultData.results.votes?.blankVotes || 0,
               partyVotes: resultData.results.votes?.partyVotes || [],
             };
+          
+          if (resultData.results.location) {
+            ballot.location = {
+              department: resultData.results.location.department || "",
+              province: resultData.results.location.province || "",
+              municipality: resultData.results.location.municipality || "",
+              address: resultData.results.location.venue || ""
+            }
+          }
 
             // Actualizar número de mesa si es necesario
             if (

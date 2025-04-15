@@ -17,7 +17,7 @@ class BallotExtractor:
     def __init__(self):
         import os
         self.anthropic_enabled = os.environ.get('ENABLE_ANTHROPIC_FALLBACK', 'true').lower() == 'true'
-        self.confidence_threshold = float(os.environ.get('OCR_CONFIDENCE_THRESHOLD', '0.7'))
+        self.confidence_threshold = float(os.environ.get('OCR_CONFIDENCE_THRESHOLD', '0.8'))
         self.anthropic_extractor = AnthropicExtractor() if self.anthropic_enabled else None
     
     def extract_data(self, image_buffer):

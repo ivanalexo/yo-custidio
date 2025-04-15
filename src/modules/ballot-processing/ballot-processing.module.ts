@@ -16,6 +16,7 @@ import { DataExtractionService } from './services/data-extraction.service';
 import { ResultsService } from './services/results.service';
 import { CoreModule } from '../../core/core.module';
 import { BallotConsumerService } from './services/ballot-consumer.service';
+import { PoliticalParty, PoliticalPartySchema } from '../admin/schemas/political-party.schema';
 
 @Module({
     imports: [
@@ -23,6 +24,7 @@ import { BallotConsumerService } from './services/ballot-consumer.service';
         CoreModule,
         MongooseModule.forFeature([
             { name: Ballot.name, schema: BallotSchema},
+            { name: PoliticalParty.name, schema: PoliticalPartySchema },
         ]),
         MulterModule.register({
             limits: {
