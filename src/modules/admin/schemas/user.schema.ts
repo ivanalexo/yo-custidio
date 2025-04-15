@@ -42,11 +42,11 @@ export class User {
     },
     default: {
       upload: { total: 10, remaining: 10, resetAt: Date.now() },
-    }
+    },
   })
   tokens: {
     upload: TokenQuota;
-  }
+  };
 
   // Timestamps agregados automáticamente
   createdAt: Date;

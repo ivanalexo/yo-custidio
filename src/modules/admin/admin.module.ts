@@ -17,31 +17,46 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
 import { CoreModule } from '../../core/core.module';
 import { User, UserSchema } from './schemas/user.schema';
-import { ElectoralLocation, LocationSchema } from './schemas/electoral-location.schema';
-import { PoliticalParty, PoliticalPartySchema } from './schemas/political-party.schema';
+import {
+  ElectoralLocation,
+  LocationSchema,
+} from './schemas/electoral-location.schema';
+import {
+  PoliticalParty,
+  PoliticalPartySchema,
+} from './schemas/political-party.schema';
 
 @Module({
-    imports: [
-        CoreModule,
-        MongooseModule.forFeature([
-            { name: User.name, schema: UserSchema },
-            { name: ElectoralLocation.name, schema: LocationSchema },
-            { name: PoliticalParty.name, schema: PoliticalPartySchema },
-        ]),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.registerAsync({
-            imports: [ConfigModule],
-            useFactory: (configService: ConfigService) => ({
-                secret: configService.get<string>('app.jwt.secret'),
-                signOptions: {
-                    expiresIn: configService.get('app.jwt.expirationTime', '1d')
-                },
-            }),
-            inject: [ConfigService],
-        }),
-    ],
-    controllers: [AuthController, ElectoralLocationController, PoliticalPartyController],
-    providers: [AuthService, ElectoralLocationService, PoliticalPartyService, JwtStrategy],
-    exports: [AuthService, ElectoralLocationService, PoliticalPartyService],
+  imports: [
+    CoreModule,
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: ElectoralLocation.name, schema: LocationSchema },
+      { name: PoliticalParty.name, schema: PoliticalPartySchema },
+    ]),
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('app.jwt.secret'),
+        signOptions: {
+          expiresIn: configService.get('app.jwt.expirationTime', '1d'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+  controllers: [
+    AuthController,
+    ElectoralLocationController,
+    PoliticalPartyController,
+  ],
+  providers: [
+    AuthService,
+    ElectoralLocationService,
+    PoliticalPartyService,
+    JwtStrategy,
+  ],
+  exports: [AuthService, ElectoralLocationService, PoliticalPartyService],
 })
 export class AdminModule {}

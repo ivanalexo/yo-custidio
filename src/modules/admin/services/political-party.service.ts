@@ -83,7 +83,10 @@ export class PoliticalPartyService {
     return this.partyModel.findOne({ partyId }).exec();
   }
 
-  async update(id: string, updatePartyDto: UpdatePoliticalPartyDto): Promise<PoliticalParty> {
+  async update(
+    id: string,
+    updatePartyDto: UpdatePoliticalPartyDto,
+  ): Promise<PoliticalParty> {
     const updatedParty = await this.partyModel
       .findByIdAndUpdate(id, updatePartyDto, { new: true })
       .exec();

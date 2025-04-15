@@ -4,7 +4,12 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import { resolve } from 'path';
@@ -21,8 +26,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   private readonly resultQueueName: string;
 
   constructor(private configService: ConfigService) {
-    this.exchangeName = this.configService.get<string>('app.rabbitmq.exchanges.ballotProcessing', 'ballot_processing_exchange');
-    this.resultQueueName = this.configService.get<string>('app.rabbitmq.queues.results', 'results_queue');
+    this.exchangeName = this.configService.get<string>(
+      'app.rabbitmq.exchanges.ballotProcessing',
+      'ballot_processing_exchange',
+    );
+    this.resultQueueName = this.configService.get<string>(
+      'app.rabbitmq.queues.results',
+      'results_queue',
+    );
   }
 
   async onModuleInit() {
@@ -31,14 +42,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     if (this.reconnectTimeout) {
-        clearTimeout(this.reconnectTimeout);
+      clearTimeout(this.reconnectTimeout);
     }
     await this.disconnect();
   }
 
   private async connect() {
     if (this.isConnecting) {
-        return;
+      return;
     }
     this.isConnecting = true;
 
@@ -71,7 +82,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         await this.channel.checkExchange(this.exchangeName);
         this.logger.log(`Exchange ${this.exchangeName} encontado`);
       } catch (error) {
-        this.logger.warn(`Exchange ${this.exchangeName} no existe, esperando que el worker de python inicie...`);
+        this.logger.warn(
+          `Exchange ${this.exchangeName} no existe, esperando que el worker de python inicie...`,
+        );
       }
       this.logger.log('Successfully connected to RabbitMQ');
       this.isConnecting = false;
@@ -85,33 +98,33 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   private scheduleReconnect() {
     if (this.reconnectTimeout) {
-        clearTimeout(this.reconnectTimeout);
+      clearTimeout(this.reconnectTimeout);
     }
 
     this.channel = null;
     this.connection = null;
 
     this.reconnectTimeout = setTimeout(async () => {
-        this.logger.log('Attempting to reconnect to RabbitMQ...');
-        try {
-            await this.connect();
-        } catch (error) {
-            this.logger.log('Failed reconnecting: ', error);
-        }
+      this.logger.log('Attempting to reconnect to RabbitMQ...');
+      try {
+        await this.connect();
+      } catch (error) {
+        this.logger.log('Failed reconnecting: ', error);
+      }
     }, 5000);
   }
 
   private async disconnect() {
     try {
-        if (this.channel) {
-            await this.channel.close();
-            this.channel = null;
-        }
+      if (this.channel) {
+        await this.channel.close();
+        this.channel = null;
+      }
 
-        if (this.connection) {
-            await this.connection.close();
-            this.connection = null;
-        }
+      if (this.connection) {
+        await this.connection.close();
+        this.connection = null;
+      }
       this.logger.log('Successfully disconnected from RabbitMQ');
     } catch (error) {
       this.logger.error('Error disconnecting:', error);
@@ -120,27 +133,31 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
   async publishMessage(exchange: string, routingKey: string, message: any) {
     try {
+      if (!this.channel) {
+        this.logger.error('No se puede publicar mensaje: Canal nulo');
+        await this.connect();
         if (!this.channel) {
-            this.logger.error('No se puede publicar mensaje: Canal nulo');
-            await this.connect();
-            if (!this.channel) {
-              throw new Error('Fallo al crear canal');
-            }
+          throw new Error('Fallo al crear canal');
         }
+      }
+
+      try {
+        await this.channel.checkExchange(exchange);
+      } catch (error) {
+        this.logger.error(
+          `Exchange ${exchange} no existe. Esperando 2 segundos y reintentar...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         try {
           await this.channel.checkExchange(exchange);
-        } catch (error) {
-          this.logger.error(`Exchange ${exchange} no existe. Esperando 2 segundos y reintentar...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          try {
-            await this.channel.checkExchange(exchange);
         } catch (secondError) {
-            this.logger.error(`Exchange ${exchange} sigue sin existir. Mensaje no publicado.`);
-            return false;
+          this.logger.error(
+            `Exchange ${exchange} sigue sin existir. Mensaje no publicado.`,
+          );
+          return false;
         }
-        }
+      }
 
       this.logger.log(`Publicando mensaje a ${exchange}:${routingKey}`);
 
@@ -151,7 +168,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         { persistent: true },
       );
 
-      this.logger.log(`Mensaje publicado exitosamente a ${exchange}:${routingKey}`);
+      this.logger.log(
+        `Mensaje publicado exitosamente a ${exchange}:${routingKey}`,
+      );
     } catch (error) {
       console.error('Error publishing:', error);
     }
@@ -160,7 +179,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   async consumeMessage<T>(
     queue: string,
     callback: (message: T) => Promise<void>,
-  ): Promise<{ consumerTag: string}> {
+  ): Promise<{ consumerTag: string }> {
     const setupConsumer = async () => {
       try {
         if (!this.channel) {
@@ -175,8 +194,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         try {
           await this.channel.checkQueue(queue);
         } catch (error) {
-          this.logger.error(`Cola ${queue} no existe. Esperando a que sea creada...`);
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          this.logger.error(
+            `Cola ${queue} no existe. Esperando a que sea creada...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           return setupConsumer();
         }
 
@@ -196,12 +217,17 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
                 if (this.channel) {
                   this.channel.ack(message);
                 } else {
-                  this.logger.warn('No se puede reconocer el mensaje: canal es null');
+                  this.logger.warn(
+                    'No se puede reconocer el mensaje: canal es null',
+                  );
                   await this.connect();
                   await setupConsumer();
                 }
               } catch (ackError) {
-                this.logger.error('Error reconociendo mensaje, el canal pudo haberse cerrado:', ackError);
+                this.logger.error(
+                  'Error reconociendo mensaje, el canal pudo haberse cerrado:',
+                  ackError,
+                );
                 // Si hay un error al hacer ack, intentamos reconectar
                 await this.connect();
                 await setupConsumer();
@@ -219,7 +245,10 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
                   await setupConsumer();
                 }
               } catch (nackError) {
-                this.logger.error('Error rejecting message, channel might be closed:', nackError);
+                this.logger.error(
+                  'Error rejecting message, channel might be closed:',
+                  nackError,
+                );
                 await this.connect();
                 await setupConsumer();
               }
@@ -234,7 +263,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         // Reintenta configurar el consumidor después de un tiempo
         setTimeout(() => {
           this.logger.log('Retrying to set up consumer...');
-          setupConsumer().catch(err => {
+          setupConsumer().catch((err) => {
             this.logger.error('Failed to retry consumer setup:', err);
           });
         }, 5000);
@@ -246,7 +275,11 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     return setupConsumer();
   }
 
-  async retryDeadLetterMessages(dlqName: string, targetQueue: string, count: number = 10): Promise<number> {
+  async retryDeadLetterMessages(
+    dlqName: string,
+    targetQueue: string,
+    count: number = 10,
+  ): Promise<number> {
     if (!this.channel) {
       await this.connect();
       if (!this.channel) {
@@ -264,12 +297,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
       try {
         // Publicar a la cola original
-        this.channel.publish(
-          '',
-          targetQueue,
-          message.content,
-          { persistent: true }
-        );
+        this.channel.publish('', targetQueue, message.content, {
+          persistent: true,
+        });
 
         // Confirmar procesamiento
         this.channel.ack(message);

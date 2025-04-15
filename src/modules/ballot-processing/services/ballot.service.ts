@@ -116,7 +116,7 @@ export class BallotService {
         timestamp: new Date(),
         metadata: {
           tableNumber: savedBallot.tableNumber,
-        }
+        },
       });
 
       return {
@@ -203,14 +203,15 @@ export class BallotService {
         timestamp: new Date(),
         metadata: {
           tableNumber: ballot.tableNumber,
-        }
-      })
+        },
+      });
 
       switch (resultData.status) {
         case 'COMPLETED':
           // Actualizar datos de votos si están disponibles
           ballot.confidence = resultData.confidence || 0;
-          ballot.needsHumanVerification = resultData.needsHumanVerification || (resultData.confidence < 0.7);
+          ballot.needsHumanVerification =
+            resultData.needsHumanVerification || resultData.confidence < 0.7;
 
           historyEntry.notes = `Acta procesada correctamente (fuente: ${resultData.source || 'unknown'}, confianza: ${ballot.confidence.toFixed(2)})`;
 
@@ -225,15 +226,15 @@ export class BallotService {
               blankVotes: resultData.results.votes?.blankVotes || 0,
               partyVotes: resultData.results.votes?.partyVotes || [],
             };
-          
-          if (resultData.results.location) {
-            ballot.location = {
-              department: resultData.results.location.department || "",
-              province: resultData.results.location.province || "",
-              municipality: resultData.results.location.municipality || "",
-              address: resultData.results.location.venue || ""
+
+            if (resultData.results.location) {
+              ballot.location = {
+                department: resultData.results.location.department || '',
+                province: resultData.results.location.province || '',
+                municipality: resultData.results.location.municipality || '',
+                address: resultData.results.location.venue || '',
+              };
             }
-          }
 
             // Actualizar número de mesa si es necesario
             if (
@@ -335,7 +336,7 @@ export class BallotService {
         ballotId: ballotId,
         status: 'ERROR',
         timestamp: new Date(),
-        error: error instanceof Error ? error.message : 'Error desconocido'
+        error: error instanceof Error ? error.message : 'Error desconocido',
       });
 
       // Intentar actualizar el estado a ERROR en caso de fallo
