@@ -2,10 +2,8 @@
 import { Db } from 'mongodb';
 import { generateObjectId } from './utils';
 
-export async function seedElectoralLocations(
-  db: Db,
-): Promise<void> {
-    const collection = db.collection('electorallocations');
+export async function seedElectoralLocations(db: Db): Promise<void> {
+  const collection = db.collection('electorallocations');
 
   // Primero, limpiar la colección existente
   await collection.deleteMany({});

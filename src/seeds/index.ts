@@ -17,8 +17,7 @@ const logger = new Logger('Seed');
 //const MONGODB_HOST = process.env.MONGODB_HOST || 'localhost';
 const MONGODB_PORT = process.env.MONGODB_PORT || '27019';
 const MONGODB_DB = process.env.MONGODB_DB || 'electoral_db';
-const MONGODB_URI =
-  `mongodb://localhost:${MONGODB_PORT}/${MONGODB_DB}`;
+const MONGODB_URI = `mongodb://localhost:${MONGODB_PORT}/${MONGODB_DB}`;
 
 async function bootstrap() {
   logger.log(`Conectando a MongoDB en ${MONGODB_URI}`);

@@ -11,7 +11,8 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
   const parties = [
     {
       partyId: 'MAS-IPSP',
-      fullName: 'Movimiento Al Socialismo - Instrumento Político por la Soberanía de los Pueblos',
+      fullName:
+        'Movimiento Al Socialismo - Instrumento Político por la Soberanía de los Pueblos',
       description: 'Partido político boliviano fundado en 1995.',
       logoUrl: 'https://example.com/logos/mas.png',
       color: '#2196F3',
@@ -24,9 +25,9 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
           electionYear: 2025,
           candidateName: 'Luis Arce',
           position: 'Presidente',
-          enabled: true
-        }
-      ]
+          enabled: true,
+        },
+      ],
     },
     {
       partyId: 'CC',
@@ -43,9 +44,9 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
           electionYear: 2025,
           candidateName: 'Carlos Mesa',
           position: 'Presidente',
-          enabled: true
-        }
-      ]
+          enabled: true,
+        },
+      ],
     },
     {
       partyId: 'CREEMOS',
@@ -62,9 +63,9 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
           electionYear: 2025,
           candidateName: 'Luis Fernando Camacho',
           position: 'Presidente',
-          enabled: true
-        }
-      ]
+          enabled: true,
+        },
+      ],
     },
     {
       partyId: 'FPV',
@@ -81,9 +82,9 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
           electionYear: 2025,
           candidateName: 'Chi Hyun Chung',
           position: 'Presidente',
-          enabled: true
-        }
-      ]
+          enabled: true,
+        },
+      ],
     },
     {
       partyId: 'PAN-BOL',
@@ -100,10 +101,10 @@ export async function seedPoliticalParties(db: Db): Promise<void> {
           electionYear: 2025,
           candidateName: 'Ruth Nina',
           position: 'Presidente',
-          enabled: true
-        }
-      ]
-    }
+          enabled: true,
+        },
+      ],
+    },
   ];
 
   // Insertar partidos
