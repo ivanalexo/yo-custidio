@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-// src/modules/ballot-processing/schemas/ballot.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
@@ -14,10 +12,10 @@ export class Location {
   province: string;
 
   @Prop()
-  municipality: string;
+  locality: string;
 
   @Prop()
-  address: string;
+  pollingPlace: string;
 }
 
 @Schema({ timestamps: true })
@@ -32,6 +30,9 @@ export class Party {
 @Schema({ timestamps: true })
 export class Ballot {
   @Prop({ required: true })
+  tableCode: string;
+
+  @Prop({ required: true })
   tableNumber: string;
 
   @Prop()
@@ -42,7 +43,8 @@ export class Ballot {
     department?: string;
     province?: string;
     municipality?: string;
-    address?: string;
+    locality?: string;
+    pollingPlace?: string;
   };
 
   @Prop({ type: Number, default: 0, min: 0, max: 1 })
@@ -132,6 +134,7 @@ export class Ballot {
 export const BallotSchema = SchemaFactory.createForClass(Ballot);
 
 // Crear índices para mejorar el rendimiento
+BallotSchema.index({ tableCode: 1 });
 BallotSchema.index({ tableNumber: 1 });
 BallotSchema.index({ 'processingStatus.stage': 1 });
 BallotSchema.index({ verificationCode: 1 });

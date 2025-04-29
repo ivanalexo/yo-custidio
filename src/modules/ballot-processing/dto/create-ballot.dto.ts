@@ -4,7 +4,11 @@ import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
 export class CreateBallotDto {
   @IsString()
   @IsNotEmpty()
-  tableNumber: string;
+  tableCode: string;
+
+  @IsString()
+  @IsOptional()
+  tableNumber?: string;
 
   @IsString()
   @IsOptional()

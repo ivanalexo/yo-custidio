@@ -202,7 +202,6 @@ def process_ocr_extraction(ch, method, properties, body):
         extraction_result = ballot_extractor.extract_data(image_data)
         
         # IMPORTANTE: Convertir tipos NumPy a tipos nativos de Python
-        # Esta es la solución al problema de serialización
         def numpy_to_python(obj):
             if isinstance(obj, dict):
                 return {k: numpy_to_python(v) for k, v in obj.items()}
@@ -235,7 +234,7 @@ def process_ocr_extraction(ch, method, properties, body):
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
-        elif extraction_result['confidence'] < 0.8 and 'anthropic' not in extraction_result.get('source', ''):
+        elif extraction_result['confidence'] < 0.7 and 'anthropic' not in extraction_result.get('source', ''):
             # Si la confianza es baja y no viene de Anthropic, enviar a fallback
             logger.info(f"Baja confianza en extracción ({extraction_result['confidence']:.2f}), enviando a Anthropic")
             channel.basic_publish(
@@ -258,9 +257,16 @@ def process_ocr_extraction(ch, method, properties, body):
                     'ballotId': ballot_id,
                     'status': 'COMPLETED',
                     'results': {
-                        'tableNumber': extraction_result['tableNumber'],
-                        'votes': extraction_result['votes'],
-                        'location': extraction_result.get('location', {})
+                        'tableCode': extraction_result['results'].get('tableCode', ''),
+                        'tableNumber': extraction_result['results'].get('tableNumber', ''),
+                        'votes': extraction_result['results'].get('votes', {}),
+                        'location': extraction_result['results'].get('location', {
+                            'department': '',
+                            'province': '',
+                            'municipality': '',
+                            'locality': '',
+                            'pollingPlace': ''
+                        }),
                     },
                     'confidence': extraction_result['confidence'],
                     'source': extraction_result.get('source', 'ocr'),
@@ -312,6 +318,7 @@ def process_anthropic_fallback(ch, method, properties, body):
                 return obj
         
         result = numpy_to_python(result)
+        print(result['results'])
         
         if 'results' in result and result['results']:
             # Enviar resultados finales
@@ -322,11 +329,20 @@ def process_anthropic_fallback(ch, method, properties, body):
                     'ballotId': ballot_id,
                     'status': 'COMPLETED',
                     'results': {
+                        'tableCode': result['results'].get('tableCode', ''),
                         'tableNumber': result['results']['tableNumber'],
-                        'votes': result['results']['votes']
+                        'votes': result['results']['votes'],
+                        'location': result['results'].get('location', {
+                            'department': '',
+                            'province': '',
+                            'municipality': '',
+                            'locality': '',
+                            'pollingPlace': ''
+                        }),
                     },
                     'confidence': result['confidence'],
-                    'source': 'anthropic'
+                    'source': 'anthropic',
+                    'needsHumanVerification': result.get('needsHumanVerification', result['confidence'] < 0.7)
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
