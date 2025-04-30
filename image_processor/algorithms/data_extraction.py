@@ -20,11 +20,17 @@ def extract_data_from_ballot(image):
     
     # 3.1 Extraer código de mesa
     code_roi = extract_roi(processed_image, roi_map['codigo_mesa'])
-    table_number = extract_text_from_region(code_roi, 'numeric')
-    data['tableNumber'] = table_number
-    confidence_scores['tableNumber'] = calculate_confidence(code_roi)
+    table_code = extract_text_from_region(code_roi, 'alphanumeric')
+    data['tableCode'] = table_code
+    confidence_scores['tableCode'] = calculate_confidence(code_roi)
     
-        # NUEVO: 3.2 Extraer información de ubicación
+    # 3.1.2 extraer numero de mesa
+    mesa_roi = extract_roi(processed_image, roi_map['numero_mesa'])
+    table_number = extract_text_from_region(mesa_roi, 'alphanumeric')
+    data['tableNumber'] = table_number
+    confidence_scores['tableNumber'] = calculate_confidence(mesa_roi)
+    
+    #  3.2 Extraer información de ubicación
     department_roi = extract_roi(processed_image, roi_map['departamento'])
     department = extract_text_from_region(department_roi, 'text')
     confidence_scores['departamento'] = calculate_confidence(department_roi)
@@ -38,10 +44,13 @@ def extract_data_from_ballot(image):
     municipality = extract_text_from_region(municipality_roi, 'text')
     confidence_scores['municipio'] = calculate_confidence(municipality_roi)
     
+    locality_roi = extract_roi(processed_image, roi_map['localidad'])
+    locality = extract_text_from_region(locality_roi, 'text')
+    confidence_scores['localidad'] = calculate_confidence(locality_roi)
     
-    venue_roi = extract_roi(processed_image, roi_map['recinto'])
-    venue = extract_text_from_region(venue_roi, 'text')
-    confidence_scores['recinto'] = calculate_confidence(venue_roi)
+    polling_place_roi = extract_roi(processed_image, roi_map['recinto'])
+    polling_place = extract_text_from_region(polling_place_roi, 'text')
+    confidence_scores['recinto'] = calculate_confidence(polling_place_roi)
     
     # 3.3 Extraer votos por partido
     party_votes = []
@@ -78,12 +87,12 @@ def extract_data_from_ballot(image):
     null_confidence = calculate_confidence(null_roi)
     
     # 4. Estructurar datos
-    data['tableNumber'] = table_number
     data['location'] = {
         'department': department,
         'province': province,
         'municipality': municipality,
-        'venue': venue
+        'locality': locality,
+        'pollingPlace': polling_place
     }
     data['votes'] = {
         'partyVotes': party_votes,
@@ -99,16 +108,18 @@ def extract_data_from_ballot(image):
     # 5. Verificar consistencia lógica y calcular confianza general
     consistency_score = verify_data_consistency(data)
     avg_confidence = sum([
+        confidence_scores['tableCode'],
         confidence_scores['tableNumber'],
         confidence_scores['departamento'],
         confidence_scores['provincia'],
         confidence_scores['municipio'],
+        confidence_scores['localidad'],
         confidence_scores['recinto'],
         valid_confidence,
         blank_confidence,
         null_confidence,
         *[pv['confidence'] for pv in party_votes]
-    ]) / (8 + len(party_votes))
+    ]) / (10 + len(party_votes))
     
     overall_confidence = avg_confidence * consistency_score
     
@@ -127,63 +138,28 @@ def extract_text_from_region(roi, mode='text'):
     """Extrae texto de una región usando OCR con configuración optimizada"""
     if roi.size == 0:
         return ""
-    
+
     # Aplicar optimizaciones según el tipo de texto
     if mode == 'numeric':
-        # Configuración especial para dígitos
-        processed_roi = preprocess_digits(roi)
-        
         # Configuración específica para dígitos
+        processed_roi = preprocess_digits(roi)
         config = r'--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789 -l spa'
-        
-        # Realizar múltiples pases con diferentes configuraciones y elegir el mejor resultado
-        results = []
-        
-        # Pase 1: Configuración estándar
-        text1 = pytesseract.image_to_string(processed_roi, config=config)
-        if text1.strip() and text1.strip().isdigit():
-            results.append(text1.strip())
-        
-        # Pase 2: Invertir colores
-        inverted_roi = cv2.bitwise_not(processed_roi)
-        text2 = pytesseract.image_to_string(inverted_roi, config=config)
-        if text2.strip() and text2.strip().isdigit():
-            results.append(text2.strip())
-        
-        # Pase 3: Cambiar modo PSM a 8 (un solo word)
-        config3 = r'--oem 1 --psm 8 -c tessedit_char_whitelist=0123456789 -l spa'
-        text3 = pytesseract.image_to_string(processed_roi, config=config3)
-        if text3.strip() and text3.strip().isdigit():
-            results.append(text3.strip())
-        
-        # Pase 4: Redimensionar x2
-        h, w = processed_roi.shape
-        enlarged_roi = cv2.resize(processed_roi, (w*2, h*2), interpolation=cv2.INTER_CUBIC)
-        text4 = pytesseract.image_to_string(enlarged_roi, config=config)
-        if text4.strip() and text4.strip().isdigit():
-            results.append(text4.strip())
-        
-        # Elegir el resultado más probable
-        if not results:
-            return ""
-            
-        # Si hay múltiples resultados, elegir el más frecuente
-        from collections import Counter
-        counter = Counter(results)
-        most_common = counter.most_common(1)[0][0]
-        return most_common
+    elif mode == 'alphanumeric':
+        # Nueva configuración para códigos alfanuméricos
+        processed_roi = preprocess_text(roi)
+        config = r'--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-/ -l spa'
     else:
         # Optimizar para texto general
         processed_roi = preprocess_text(roi)
-        
-        # Configuración para texto general
-        config = r'--oem 1 --psm 6 -l spa+eng'
-        text = pytesseract.image_to_string(processed_roi, config=config)
-        
-        # Limpiar resultado
-        text = clean_text(text, mode)
-        
-        return text
+        config = r'--oem 1 --psm 6 -l spa'
+    
+    # Realizar OCR
+    text = pytesseract.image_to_string(processed_roi, config=config)
+    
+    # Limpiar resultado
+    text = clean_text(text, mode)
+    
+    return text
 
 def preprocess_digits(image):
     """Optimiza una imagen para reconocimiento de dígitos"""
@@ -280,19 +256,19 @@ def verify_data_consistency(data):
     # 1. Verificar que la suma de votos por partido = votos válidos
     party_votes_sum = sum(pv['votes'] for pv in data['votes']['partyVotes'])
     valid_votes = data['votes']['validVotes']
-    
+
     consistency_score = 1.0  # Perfecto por defecto
-    
+
     if valid_votes > 0:
         # Calcular diferencia porcentual
         difference = abs(party_votes_sum - valid_votes) / valid_votes
-        
+
         # Reducir score basado en la diferencia
         if difference > 0.1:  # Más del 10% de diferencia
             consistency_score *= (1.0 - min(difference, 0.5))
-    
+
     # 2. Verificar que el número de mesa es válido
     if not data['tableNumber'].isdigit() or len(data['tableNumber']) < 2:
         consistency_score *= 0.8
-    
+
     return consistency_score

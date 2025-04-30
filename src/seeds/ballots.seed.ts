@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -24,6 +23,10 @@ function randomDate(start: Date, end: Date): Date {
   return new Date(
     start.getTime() + Math.random() * (end.getTime() - start.getTime()),
   );
+}
+
+function generateTableCode(): string {
+  return randomInt(10000, 99999).toString();
 }
 
 function generateTableNumber(): string {
@@ -93,6 +96,7 @@ export async function seedBallots(db: Db): Promise<void> {
 
     // Seleccionar recinto aleatorio
     const location = randomItem(locations);
+    const tableCode = generateTableCode();
 
     // Generar número de mesa aleatorio o dentro del rango del recinto
     const tableNumber =
@@ -102,13 +106,15 @@ export async function seedBallots(db: Db): Promise<void> {
 
     // Crear acta base
     const ballot: any = {
+      tableCode,
       tableNumber,
       locationId: location._id,
       location: {
         department: location.department,
         province: location.province,
         municipality: location.municipality,
-        address: location.address,
+        locality: location.address || '',
+        pollingPlace: location.name || '',
       },
       verificationCode: generateVerificationCode(),
       imageUrl: `ballot_${i}_${generateHash(tableNumber).substring(0, 8)}`,

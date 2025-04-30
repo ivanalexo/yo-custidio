@@ -69,8 +69,10 @@ class BallotExtractor:
             response = {
                 'success': True,
                 'imageHash': image_hash,
+                'tableCode': ocr_result['results'].get('tableCode', ''),
                 'tableNumber': ocr_result['results'].get('tableNumber', ''),
                 'votes': ocr_result['results'].get('votes', {}),
+                'location': ocr_result['results'].get('location', {}),
                 'confidence': ocr_result.get('confidence', 0),
                 'source': 'ocr',  # Siempre reportamos 'ocr' en la respuesta HTTP
                 'needsVerification': ocr_result.get('confidence', 0) < self.confidence_threshold,
@@ -86,7 +88,22 @@ class BallotExtractor:
                 }
             }
 
-            return response
+            return {
+            'success': True,
+            'imageHash': image_hash,
+            'results': {
+                'tableCode': response['tableCode'],
+                'tableNumber': response['tableNumber'],
+                'location': response['location'],
+                'votes': response['votes']
+            },
+            'confidence': response['confidence'],
+            'source': response['source'],
+            'needsHumanVerification': response['needsVerification'],
+            'processedImage': processed_image_base64,
+            'dimensions': response['dimensions'],
+            'validation': response['validation']
+        }
 
         except Exception as e:
             import traceback

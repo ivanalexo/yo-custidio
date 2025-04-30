@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -69,6 +68,7 @@ export class BallotService {
       }
 
       const newBallot = new this.ballotModel({
+        tableCode: createBallotDto.tableCode,
         tableNumber: createBallotDto.tableNumber,
         locationId: createBallotDto.locationCode,
         imageHash,
@@ -140,6 +140,7 @@ export class BallotService {
     return {
       trackingId,
       tableNumber: ballot.tableNumber,
+      tableCode: ballot.tableCode,
       status: ballot.processingStatus.stage,
       verificationHistory: ballot.verificationHistory,
     };
@@ -202,6 +203,7 @@ export class BallotService {
         status: resultData.status,
         timestamp: new Date(),
         metadata: {
+          tableCode: ballot.tableCode,
           tableNumber: ballot.tableNumber,
         },
       });
@@ -220,6 +222,8 @@ export class BallotService {
             ballot.processingStatus.stage = 'VALIDATION_PENDING';
           }
           if (resultData.results) {
+            console.log(resultData.results);
+            console.log(resultData);
             ballot.votes = {
               validVotes: resultData.results.votes?.validVotes || 0,
               nullVotes: resultData.results.votes?.nullVotes || 0,
@@ -232,16 +236,21 @@ export class BallotService {
                 department: resultData.results.location.department || '',
                 province: resultData.results.location.province || '',
                 municipality: resultData.results.location.municipality || '',
-                address: resultData.results.location.venue || '',
+                locality: resultData.results.location.locality || '',
+                pollingPlace: resultData.results.location.pollingPlace || '',
               };
             }
 
             // Actualizar número de mesa si es necesario
             if (
-              resultData.results.tableNumber &&
-              (!ballot.tableNumber ||
-                ballot.tableNumber !== resultData.results.tableNumber)
+              resultData.results.tableCode &&
+              (!ballot.tableCode ||
+                ballot.tableCode !== resultData.results.tableCode)
             ) {
+              ballot.tableCode = resultData.results.tableCode;
+            }
+
+            if (resultData.results.tableNumber) {
               ballot.tableNumber = resultData.results.tableNumber;
             }
           }

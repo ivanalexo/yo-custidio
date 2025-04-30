@@ -52,6 +52,9 @@ export class BallotController {
           type: 'string',
           format: 'binary',
         },
+        tableCode: {
+          type: 'string',
+        },
         tableNumber: {
           type: 'string',
         },

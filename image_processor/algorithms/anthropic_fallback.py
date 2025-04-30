@@ -30,7 +30,9 @@ class AnthropicExtractor:
         prompt = """
         Por favor, extrae la siguiente información de esta imagen de acta electoral:
 
-        1. Código/Número de mesa
+        1. Información de mesa:
+            - Código de mesa
+            - Número de mesa (el número que aparece junto a "MESA:")
         2. Información geográfica:
             - Departamento
             - Provincia
@@ -39,34 +41,35 @@ class AnthropicExtractor:
             - Recinto
         Solo de la sección que dice PRESIDENTE/A
         3. Información de votos:
-           - Votos válidos (total)
-           - Votos nulos
-           - Votos blancos
-           - Votos por partido político (para cada partido con su sigla correspondiente)
+        - Votos válidos (total)
+        - Votos nulos
+        - Votos blancos
+        - Votos por partido político (para cada partido con su sigla correspondiente)
 
         Proporciona solo los números extraídos, sin explicaciones adicionales, en formato JSON con la siguiente estructura:
 
         {
-          "tableNumber": "string",
-          "location": {
+        "tableCode": "string",
+        "tableNumber": "string",
+        "location": {
             "department": "string",
             "province": "string",
             "municipality": "string",
             "locality": "string",
             "pollingPlace": "string"
-          },
-          "votes": {
+        },
+        "votes": {
             "validVotes": number,
             "nullVotes": number,
             "blankVotes": number,
             "partyVotes": [
-              {
+            {
                 "partyId": "string", // Sigla del partido (ej: CC, MAS-IPSP)
                 "votes": number
-              }
+            }
             ]
-          },
-          "confidence": number
+        },
+        "confidence": number
         }
 
         El campo "confidence" debe ser un valor entre 0 y 1 que refleje tu nivel de confianza en la extracción:
@@ -110,7 +113,7 @@ class AnthropicExtractor:
                 },
                 timeout=60
             )
-            
+
             logger = logging.getLogger('AnthropicExtractor')
             logger.info(f"Status Code: {response.status_code}")
             logger.info(f"Response headers: {response.headers}")

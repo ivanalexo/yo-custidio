@@ -109,6 +109,12 @@ def generate_roi_map(image, logo_coords, barcode_coords, table_coords):
             'w': int(width * 0.15),
             'h': int(height * 0.05)
         },
+        'numero_mesa': {
+            'x': int(width * 0.15),
+            'y': int(height * 0.255),
+            'w': int(width * 0.05),
+            'h': int(height * 0.04)
+        },
         # Regiones de ubicacion
         'departamento': {
             'x': int(width * 0.28),
@@ -116,7 +122,7 @@ def generate_roi_map(image, logo_coords, barcode_coords, table_coords):
             'w': int(width * 0.15),
             'h': int(height * 0.03)
         },
-                'provincia': {
+        'provincia': {
             'x': int(width * 0.28),
             'y': int(height * 0.15),
             'w': int(width * 0.15),
