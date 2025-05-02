@@ -16,6 +16,7 @@ import {
   FileTypeValidator,
   BadRequestException,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -30,6 +31,7 @@ import {
 import { CreateBallotDto } from '../dto/create-ballot.dto';
 import { BallotService } from '../services/ballot.service';
 import { TokenService } from 'src/core/services/token.service';
+import { OptionalAuthGuard } from 'src/modules/admin/guards/optional-auth.guars';
 
 @ApiTags('Actas Eletorales')
 @Controller('api/v1/public/ballots')
@@ -67,6 +69,7 @@ export class BallotController {
       },
     },
   })
+  @UseGuards(OptionalAuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadBallot(
     @UploadedFile(
@@ -102,6 +105,7 @@ export class BallotController {
       userAgent: request.headers['user-agent'] || 'unknown',
     };
 
+    this.logger.log('Informacion del cliente:', request);
     const userId = request.user?.userId; // undefined si no esta autienticado
 
     if (userId) {

@@ -42,7 +42,7 @@ export class TokenService {
 
     let tokens = await this.cacheManager.get<any>(cacheKey);
 
-    if (tokens === undefined) {
+    if (tokens === undefined || tokens === null) {
       const user = await this.userModel.findById(userId).exec();
 
       if (!user) {
