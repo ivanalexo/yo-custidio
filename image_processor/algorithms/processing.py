@@ -50,6 +50,97 @@ def preprocess_image(image):
     
     return result
 
+def preprocess_image_for_anthropic(image):
+    """ Procesamiento minimo de imagen para Anthropic"""
+        # 1. Si la imagen es muy grande, redimensionarla manteniendo la calidad
+    if len(image.shape) == 3:
+        height, width, _ = image.shape
+    else:
+        height, width = image.shape
+    
+    # Solo redimensionar si es necesario, manteniendo aspecto y calidad
+    max_dimension = 2000  # Anthropic puede manejar imágenes grandes
+    if height > max_dimension or width > max_dimension:
+        scale = min(max_dimension/width, max_dimension/height)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        resized = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    else:
+        resized = image.copy()
+    
+    # 2. Corrección de perspectiva si es muy necesaria (mantener colores)
+    if len(resized.shape) == 3:
+        gray_for_perspective = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    else:
+        gray_for_perspective = resized
+        
+    corrected = correct_perspective_color(resized, gray_for_perspective)
+    
+    # 3. Ligera mejora de contraste sin destruir la imagen
+    if len(corrected.shape) == 3:
+        # Para imágenes a color, mejorar ligeramente el contraste
+        lab = cv2.cvtColor(corrected, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        enhanced = cv2.merge([l, a, b])
+        result = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+    else:
+        # Para imágenes en escala de grises
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        result = clahe.apply(corrected)
+    
+    return result
+
+def correct_perspective_color(image, gray_reference):
+    """Corrección de perspectiva que mantiene la imagen original (color o gris)"""
+    # 1. Binarizar la imagen de referencia
+    _, binary = cv2.threshold(gray_reference, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    # 2. Encontrar contornos
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # 3. Encontrar el contorno más grande (asumimos que es el documento)
+    if not contours:
+        return image  # No hay contornos, devolver la imagen original
+        
+    max_contour = max(contours, key=cv2.contourArea)
+    
+    # 4. Aproximar a un polígono para obtener los vértices
+    epsilon = 0.02 * cv2.arcLength(max_contour, True)
+    approx = cv2.approxPolyDP(max_contour, epsilon, True)
+    
+    # 5. Si no es aproximadamente un rectángulo (4 vértices), devolver imagen original
+    if len(approx) != 4:
+        return image
+    
+    # 6. Ordenar los puntos para transformar perspectiva
+    rect = order_points(approx.reshape(len(approx), 2))
+    
+    # 7. Calcular nuevas dimensiones
+    width = max(
+        np.linalg.norm(rect[0] - rect[1]),
+        np.linalg.norm(rect[2] - rect[3])
+    )
+    height = max(
+        np.linalg.norm(rect[0] - rect[3]),
+        np.linalg.norm(rect[1] - rect[2])
+    )
+    
+    # 8. Definir puntos de destino
+    dst = np.array([
+        [0, 0],
+        [width - 1, 0],
+        [width - 1, height - 1],
+        [0, height - 1]
+    ], dtype=np.float32)
+    
+    # 9. Transformar perspectiva en la imagen original (mantener colores)
+    M = cv2.getPerspectiveTransform(rect.astype(np.float32), dst)
+    warped = cv2.warpPerspective(image, M, (int(width), int(height)))
+    
+    return warped
+
 def correct_perspective(image):
     """Corrección de perspectiva para enderezar el documento"""
     # 1. Binarizar la imagen

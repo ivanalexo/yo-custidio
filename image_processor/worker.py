@@ -10,7 +10,7 @@ import time
 import threading
 import logging
 from algorithms.extractor import BallotExtractor
-from algorithms.processing import check_if_ballot
+from algorithms.processing import check_if_ballot, preprocess_image, preprocess_image_for_anthropic
 
 # Configurar logging
 logging.basicConfig(
@@ -130,16 +130,16 @@ def process_image_validation(ch, method, properties, body):
         import hashlib
         image_hash = hashlib.sha256(image_data).hexdigest()
         
-        # 2. Convertir a escala de grises
-        from algorithms.processing import preprocess_image
-        processed_img = preprocess_image(img)
+        # 2. Convertir a escala de grises para validación
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
-        # 3. Validar si es un acta electoral
-
-        is_valid, confidence, reason = check_if_ballot(processed_img)
+        # 3. Validar si es un acta electoral (usando imagen en gris sin procesar mucho)
+        is_valid, confidence, reason = check_if_ballot(gray)
         
         if is_valid:
             # Si es válida, publicar a la cola de OCR
+            # IMPORTANTE: Mantener tanto la imagen original como la procesada
+            processed_img = preprocess_image(img)
             _, buffer = cv2.imencode('.jpg', processed_img)
             processed_image_base64 = base64.b64encode(buffer).decode('utf-8')
             
@@ -150,6 +150,7 @@ def process_image_validation(ch, method, properties, body):
                     'ballotId': ballot_id,
                     'imageHash': image_hash,
                     'processedImageBuffer': processed_image_base64,
+                    'originalImageBuffer': image_base64,  # Mantener imagen original
                     'validationConfidence': confidence
                 }),
                 properties=pika.BasicProperties(
@@ -191,6 +192,7 @@ def process_ocr_extraction(ch, method, properties, body):
         message = json.loads(body)
         ballot_id = message.get('ballotId')
         processed_image_base64 = message.get('processedImageBuffer')
+        original_image_base64 = message.get('originalImageBuffer')  # Imagen original
         validation_confidence = message.get('validationConfidence', 0.0)
         
         logger.info(f"Procesando extracción OCR para acta: {ballot_id}")
@@ -229,12 +231,12 @@ def process_ocr_extraction(ch, method, properties, body):
                 routing_key='anthropic_fallback',
                 body=json.dumps({
                     'ballotId': ballot_id,
-                    'imageBuffer': processed_image_base64,
+                    'imageBuffer': original_image_base64,  # Usar imagen original para Anthropic
                     'error': extraction_result.get('errorMessage', 'Error en extracción')
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
-        elif extraction_result['confidence'] < 0.7 and 'anthropic' not in extraction_result.get('source', ''):
+        elif extraction_result['confidence'] < 0.8 and 'anthropic' not in extraction_result.get('source', ''):
             # Si la confianza es baja y no viene de Anthropic, enviar a fallback
             logger.info(f"Baja confianza en extracción ({extraction_result['confidence']:.2f}), enviando a Anthropic")
             channel.basic_publish(
@@ -242,7 +244,7 @@ def process_ocr_extraction(ch, method, properties, body):
                 routing_key='anthropic_fallback',
                 body=json.dumps({
                     'ballotId': ballot_id,
-                    'imageBuffer': processed_image_base64,
+                    'imageBuffer': original_image_base64,  # Usar imagen original para Anthropic
                     'ocrResult': extraction_result
                 }),
                 properties=pika.BasicProperties(delivery_mode=2)
@@ -292,13 +294,23 @@ def process_anthropic_fallback(ch, method, properties, body):
         
         logger.info(f"Procesando fallback Anthropic para acta: {ballot_id}")
         
-        # Decodificar imagen
+        # Decodificar imagen original
         image_data = base64.b64decode(image_base64)
+        img_array = np.frombuffer(image_data, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         
-        # Usar el fallback de Anthropic
+        # Aplicar preprocesamiento mínimo para Anthropic
+        from algorithms.processing import preprocess_image_for_anthropic
+        img_for_anthropic = preprocess_image_for_anthropic(img)
+        
+        # Codificar imagen procesada minimamente
+        _, buffer = cv2.imencode('.jpg', img_for_anthropic, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        processed_image_data = buffer.tobytes()
+        
+        # Usar el fallback de Anthropic con imagen mínimamente procesada
         from algorithms.anthropic_fallback import AnthropicExtractor
         extractor = AnthropicExtractor()
-        result = extractor.extract_data_from_image(image_data)
+        result = extractor.extract_data_from_image(processed_image_data)
         
         # Convertir tipos NumPy a tipos Python nativos
         def numpy_to_python(obj):

@@ -28,11 +28,11 @@ class AnthropicExtractor:
 
         # Crear prompt para la extracción
         prompt = """
-        Por favor, extrae la siguiente información de esta imagen de acta electoral:
+        Por favor, extrae la siguiente información de esta imagen:
 
         1. Información de mesa:
             - Código de mesa
-            - Número de mesa (el número que aparece junto a "MESA:")
+            - Número de mesa
         2. Información geográfica:
             - Departamento
             - Provincia
@@ -122,6 +122,7 @@ class AnthropicExtractor:
 
             response.raise_for_status()
             data = response.json()
+            logger.info(f"Response JSON: {data}")
 
             # Extraer y parsear la respuesta JSON
             if not data or 'content' not in data or not data['content']:

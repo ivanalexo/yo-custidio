@@ -50,7 +50,7 @@ def process_image():
             # Importar los módulos principales para verificar que están disponibles
             import algorithms
             from algorithms.extractor import BallotExtractor
-            from algorithms.processing import preprocess_image
+            from algorithms.processing import preprocess_image_for_anthropic
             from algorithms.template_matching import identify_acta_structure
             logger.info("Módulos importados correctamente")
         except ImportError as import_error:
@@ -62,20 +62,28 @@ def process_image():
         logger.info("Iniciando procesamiento de imagen")
         img_array = np.frombuffer(image_data, np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        processed_img = preprocess_image(gray)
+        
+        # Usar preprocesamiento mínimo para mantener calidad de imagen
+        processed_img = preprocess_image_for_anthropic(img)
 
         # Verificar si es un acta válida
-        is_valid, confidence, reason = check_if_ballot(processed_img)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+        is_valid, confidence, reason = check_if_ballot(gray)
 
         # Generar hash para identificación
         image_hash = hashlib.sha256(image_data).hexdigest()
         
-        # Preparar respuesta con la imagen procesada
-        _, buffer = cv2.imencode('.jpg', processed_img)
+        # Preparar respuesta con la imagen procesada mínimamente
+        if len(processed_img.shape) == 3:
+            _, buffer = cv2.imencode('.jpg', processed_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        else:
+            _, buffer = cv2.imencode('.jpg', processed_img)
         processed_image_base64 = base64.b64encode(buffer).decode('utf-8')
         
-        height, width = processed_img.shape
+        if len(processed_img.shape) == 3:
+            height, width, _ = processed_img.shape
+        else:
+            height, width = processed_img.shape
         
         response = {
             "imageHash": image_hash,
